@@ -10,7 +10,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
+    <div className={`rounded-2xl border border-slate-200/80 bg-white shadow-md shadow-slate-200/60 ${className}`}>
       {children}
     </div>
   );
@@ -35,13 +35,13 @@ export function Btn({
 }) {
   const styles: Record<string, string> = {
     primary:
-      "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 shadow-sm",
+      "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 shadow-md shadow-blue-600/20",
     secondary:
       "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 disabled:text-slate-300 disabled:cursor-not-allowed shadow-sm",
     ghost: "bg-transparent text-slate-600 hover:bg-slate-100 disabled:text-slate-300",
-    danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 shadow-sm",
+    danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 shadow-md shadow-red-600/20",
     success:
-      "bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-300 shadow-sm",
+      "bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-300 shadow-md shadow-emerald-600/20",
   };
   return (
     <button
@@ -49,7 +49,7 @@ export function Btn({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${styles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${styles[variant]} ${className}`}
     >
       {children}
     </button>
@@ -75,7 +75,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${tones[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${tones[tone]} ${className}`}
     >
       {children}
     </span>
@@ -91,7 +91,7 @@ export function SectionTitle({
 }) {
   return (
     <div className="mb-3 flex items-baseline justify-between gap-3">
-      <h3 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+      <h3 className="text-sm font-bold tracking-wide text-slate-500 uppercase">
         {children}
       </h3>
       {hint ? <div className="text-xs text-slate-400">{hint}</div> : null}
@@ -101,11 +101,11 @@ export function SectionTitle({
 
 export function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm shadow-slate-100">
       <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">
         {label}
       </div>
-      <div className="text-lg font-semibold text-slate-800">{value}</div>
+      <div className="text-xl font-bold text-slate-800">{value}</div>
     </div>
   );
 }

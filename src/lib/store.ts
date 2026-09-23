@@ -60,3 +60,40 @@ export function saveDrafts(drafts: DraftSnapshot[]): void {
 export function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/* --------------------------- demo sign-in --------------------------- */
+
+export interface SessionUser {
+  name: string;
+  email: string;
+}
+
+const USER_KEY = "ttg:user:v1";
+
+export function loadUser(): SessionUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as SessionUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveUser(user: SessionUser): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {
+    /* noop */
+  }
+}
+
+export function clearUser(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(USER_KEY);
+  } catch {
+    /* noop */
+  }
+}

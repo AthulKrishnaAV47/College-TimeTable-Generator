@@ -1,9 +1,11 @@
 import type {
   Course,
   EligibilityRow,
+  NearMissSchedule,
   RankPreference,
   ScheduleConstraints,
   ScheduleSolution,
+  SolveOutcome,
   SolverFailure,
   StudentProfile,
   CoursePreferences,
@@ -51,6 +53,10 @@ export interface AppState {
   solutionIdx: number;
   truncatedSearch: boolean;
   failure: SolverFailure | null;
+  /** how the solver handled the no-class rules for the last search */
+  solveOutcome: SolveOutcome | null;
+  /** renderable best-effort schedule when outcome === "impossible" */
+  nearMiss: NearMissSchedule | null;
 }
 
 export const DEFAULT_STATE: AppState = {
@@ -70,6 +76,8 @@ export const DEFAULT_STATE: AppState = {
   solutionIdx: 0,
   truncatedSearch: false,
   failure: null,
+  solveOutcome: null,
+  nearMiss: null,
 };
 
 export const STEPS = [

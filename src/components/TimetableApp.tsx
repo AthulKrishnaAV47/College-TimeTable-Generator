@@ -6,13 +6,15 @@ import type {
   CoursePreferences,
   DraftSnapshot,
   EligibilitySummary,
+  NearMissSchedule,
+  Placement,
   RankPreference,
   ScheduleConstraints,
   ScheduleSolution,
   StudentProfile,
 } from "@/lib/types";
 import { buildEligibility } from "@/lib/eligibility";
-import { solve, autoSelectCourses } from "@/lib/solver";
+import { buildPlacements, solveWithFallback, autoSelectCourses } from "@/lib/solver";
 import type { AutoSelectResult } from "@/lib/solver";
 import {
   DEFAULT_STATE,
@@ -23,7 +25,14 @@ import {
   type ParsedEligibility,
   type ParsedSlotSheet,
 } from "@/lib/appState";
-import { loadDrafts, loadSession, newId, saveDrafts, saveSession } from "@/lib/store";
+import {
+  loadDrafts,
+  loadSession,
+  newId,
+  saveDrafts,
+  saveSession,
+  type SessionUser,
+} from "@/lib/store";
 import DataStep from "@/components/steps/DataStep";
 import ProfileStep from "@/components/steps/ProfileStep";
 import SubjectsStep from "@/components/steps/SubjectsStep";
@@ -31,7 +40,13 @@ import SectionsStep from "@/components/steps/SectionsStep";
 import ScheduleStep from "@/components/steps/ScheduleStep";
 import DraftsStep from "@/components/steps/DraftsStep";
 
-export default function TimetableApp() {
+export default function TimetableApp({
+  user,
+  onLogout,
+}: {
+  user?: SessionUser | null;
+  onLogout?: () => void;
+} = {}) {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [drafts, setDrafts] = useState<DraftSnapshot[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -109,21 +124,51 @@ export default function TimetableApp() {
   const runSolve = useCallback(
     (rankBy?: RankPreference) => {
       if (enrolledCourses.length === 0) return;
-      const r = solve(enrolledCourses, prefsFor(enrolledCourses), {
+      const prefs = prefsFor(enrolledCourses);
+      const r = solveWithFallback(enrolledCourses, prefs, {
         rankBy: rankBy ?? state.rankBy,
         maxSolutions: 50,
         constraints: state.constraints,
       });
-      if (r.ok) {
+      if (r.outcome === "impossible") {
+        // Make the best near-miss schedule renderable: resolve its
+        // placement ids back to full placements for the grid.
+        let nearMiss: NearMissSchedule | null = null;
+        if (r.bestNearMiss) {
+          const byId = new Map<string, Placement>();
+          for (const c of enrolledCourses) {
+            for (const pl of buildPlacements(c, prefs[c.courseCode])) byId.set(pl.id, pl);
+          }
+          const placements: Record<string, Placement> = {};
+          for (const [code, id] of Object.entries(r.bestNearMiss.assignment)) {
+            const pl = byId.get(id);
+            if (pl) placements[code] = pl;
+          }
+          nearMiss = {
+            placements,
+            clashes: r.bestNearMiss.clashes,
+            conflictHours: r.bestNearMiss.conflictHours,
+          };
+        }
+        patch({
+          solutions: null,
+          truncatedSearch: false,
+          solutionIdx: 0,
+          failure: r.failure,
+          solveOutcome: "impossible",
+          nearMiss,
+          step: 4,
+        });
+      } else {
         patch({
           solutions: r.solutions,
           truncatedSearch: r.truncated,
           solutionIdx: 0,
           failure: null,
+          solveOutcome: r.outcome,
+          nearMiss: null,
           step: 4,
         });
-      } else {
-        patch({ solutions: null, truncatedSearch: false, failure: r, step: 4 });
       }
     },
     [enrolledCourses, prefsFor, state.rankBy, state.constraints, patch]
@@ -131,7 +176,13 @@ export default function TimetableApp() {
 
   const handleAutoResult = useCallback(
     (_r: AutoSelectResult, chosenCodes: string[] | null) => {
-      patch({ autoChosen: chosenCodes, solutions: null, failure: null });
+      patch({
+        autoChosen: chosenCodes,
+        solutions: null,
+        failure: null,
+        solveOutcome: null,
+        nearMiss: null,
+      });
     },
     [patch]
   );
@@ -177,6 +228,8 @@ export default function TimetableApp() {
         coursePrefs: { ...s.coursePrefs, [code]: prefs },
         solutions: null,
         failure: null,
+        solveOutcome: null,
+        nearMiss: null,
       }));
     },
     []
@@ -184,7 +237,14 @@ export default function TimetableApp() {
 
   const handleChangeConstraints = useCallback(
     (constraints: ScheduleConstraints) => {
-      setState((s) => ({ ...s, constraints, solutions: null, failure: null }));
+      setState((s) => ({
+        ...s,
+        constraints,
+        solutions: null,
+        failure: null,
+        solveOutcome: null,
+        nearMiss: null,
+      }));
     },
     []
   );
@@ -247,19 +307,52 @@ export default function TimetableApp() {
 
   if (!hydrated) {
     return (
-      <main className="mx-auto max-w-6xl px-4 py-16 text-center text-sm text-slate-400">
+      <main className="mx-auto max-w-5xl px-4 py-16 text-center text-base text-slate-400">
         Loading your session…
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       {/* Header */}
-      <header className="mb-6">
+      <header className="mb-7">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-sm backdrop-blur">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-base font-bold text-white shadow-md">
+              {(user?.name ?? "S").slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-semibold leading-tight text-slate-800">
+                {user ? user.name : "Student"}
+              </p>
+              <p className="text-xs leading-tight text-slate-400">{user?.email ?? "local session"}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
+              onClick={() => {
+                if (window.confirm("Reset the current session (drafts are kept)?")) {
+                  setState({ ...DEFAULT_STATE });
+                }
+              }}
+            >
+              Reset session
+            </button>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-900"
+              >
+                Sign out
+              </button>
+            )}
+          </div>
+        </div>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="title-gradient text-3xl font-extrabold tracking-tight">
               Term Timetable Generator
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
@@ -267,16 +360,6 @@ export default function TimetableApp() {
               weekly contact hours for every enrolled section, zero day+time collisions.
             </p>
           </div>
-          <button
-            className="text-xs text-slate-400 underline hover:text-slate-600"
-            onClick={() => {
-              if (window.confirm("Reset the current session (drafts are kept)?")) {
-                setState({ ...DEFAULT_STATE });
-              }
-            }}
-          >
-            Reset session
-          </button>
         </div>
       </header>
 
@@ -290,7 +373,7 @@ export default function TimetableApp() {
               key={label}
               disabled={!reachable}
               onClick={() => reachable && patch({ step: i })}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-medium transition-colors ${
                 activeStep
                   ? "bg-slate-900 text-white"
                   : reachable
@@ -317,8 +400,12 @@ export default function TimetableApp() {
         <DataStep
           slotSheet={state.slotSheet}
           eligibility={state.eligibility}
-          onSlotSheet={(p: ParsedSlotSheet) => patch({ slotSheet: p, solutions: null, failure: null })}
-          onEligibility={(p: ParsedEligibility) => patch({ eligibility: p, solutions: null, failure: null })}
+          onSlotSheet={(p: ParsedSlotSheet) =>
+            patch({ slotSheet: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
+          }
+          onEligibility={(p: ParsedEligibility) =>
+            patch({ eligibility: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
+          }
           onNext={() => patch({ step: 1 })}
         />
       )}
@@ -370,6 +457,9 @@ export default function TimetableApp() {
           solutionIdx={state.solutionIdx}
           onSolutionIdx={(i) => patch({ solutionIdx: i })}
           failure={state.failure}
+          solveOutcome={state.solveOutcome}
+          nearMiss={state.nearMiss}
+          constraints={state.constraints}
           onSaveDraft={saveDraft}
           onBack={() => patch({ step: 3 })}
           onReenroll={() => patch({ step: 2 })}

@@ -8,6 +8,7 @@ import {
   type RankPreference,
   type ScheduleConstraints,
   type ScheduleSolution,
+  type SolveOutcome,
   type SolverFailure,
   type SolverResult,
   type TimeCell,
@@ -523,6 +524,133 @@ function noSolutionResult(
 
   const nearMisses = findNearMisses(courses, optionsByCode);
   return { ok: false, reason: "no-solution", impossibleCourses, blockingPairs, nearMisses, message };
+}
+
+/* ------------------------------------------------------------------ */
+/* No-class rule fallback: strict → relaxed → impossible               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * How many of this placement's 1-hour cells break a no-class rule
+ * (excluded day, or overlap with an excluded time window).
+ */
+export function placementRuleViolations(
+  p: Placement,
+  c?: ScheduleConstraints | null
+): number {
+  if (!c) return 0;
+  let n = 0;
+  for (const cell of p.busy) {
+    if (c.excludedDays?.includes(cell.day)) {
+      n++;
+      continue;
+    }
+    for (const r of c.excludedRanges ?? []) {
+      if (rangesOverlap(cell.startTime, cell.endTime, r.start, r.end)) {
+        n++;
+        break;
+      }
+    }
+  }
+  return n;
+}
+
+/** Total rule-breaking hours across a solution's placements. */
+export function solutionRuleViolations(
+  placements: Record<string, Placement>,
+  c?: ScheduleConstraints | null
+): number {
+  return Object.values(placements).reduce((s, p) => s + placementRuleViolations(p, c), 0);
+}
+
+export interface FallbackSolveResult {
+  outcome: SolveOutcome;
+  /**
+   * "strict" → rule-respecting schedules; "relaxed" → conflict-free
+   * schedules sorted by fewest rule violations first (index 0 is the
+   * closest match); "impossible" → empty.
+   */
+  solutions: ScheduleSolution[];
+  truncated: boolean;
+  /** the strict-mode failure (diagnostics), always null for strict/relaxed */
+  failure: SolverFailure | null;
+  /** only for "impossible": the complete schedule with the fewest clashes */
+  bestNearMiss: NearMiss | null;
+  message: string;
+}
+
+/**
+ * Solves with the no-class rules as hard constraints; when that fails it
+ * degrades gracefully instead of dead-ending:
+ *
+ *  1. strict   — rules honored by every section (ideal).
+ *  2. relaxed  — rules couldn't all be met: search WITHOUT them, then rank
+ *                by fewest rule-breaking hours (so "one Saturday class" or
+ *                "one 3–5 class" beats a schedule that ignores the rules).
+ *                Every relaxed option is still 100% conflict-free.
+ *  3. impossible — not even a conflict-free timetable exists when the rules
+ *                are ignored: report it as not possible, but hand back the
+ *                complete schedule with the fewest overlapping hours so the
+ *                student still sees a concrete best attempt.
+ */
+export function solveWithFallback(
+  courses: Course[],
+  prefs: Record<string, CoursePreferences>,
+  options: {
+    maxSolutions?: number;
+    maxNodes?: number;
+    rankBy?: RankPreference;
+    constraints?: ScheduleConstraints;
+  } = {}
+): FallbackSolveResult {
+  const constraints = options.constraints ?? null;
+  const rankBy = options.rankBy ?? "fewest-gaps";
+
+  // 1. Strict: honor every no-class rule.
+  const strict = solve(courses, prefs, { ...options, rankBy });
+  if (strict.ok) {
+    return {
+      outcome: "strict",
+      solutions: strict.solutions,
+      truncated: strict.truncated,
+      failure: null,
+      bestNearMiss: null,
+      message: `Found ${strict.solutions.length} timetable${strict.solutions.length === 1 ? "" : "s"} that respect all your no-class rules.`,
+    };
+  }
+
+  // 2. Relaxed: ignore the rules, then rank by fewest rule violations.
+  const relaxed = solve(courses, prefs, {
+    rankBy,
+    maxSolutions: Math.max(options.maxSolutions ?? 50, 200),
+    maxNodes: options.maxNodes,
+  });
+  if (relaxed.ok) {
+    const ranked = [...relaxed.solutions]
+      .map((s) => ({ s, v: solutionRuleViolations(s.placements, constraints) }))
+      .sort((a, b) => a.v - b.v || a.s.score - b.s.score)
+      .map((x) => x.s);
+    const best = solutionRuleViolations(ranked[0].placements, constraints);
+    return {
+      outcome: "relaxed",
+      solutions: ranked,
+      truncated: relaxed.truncated,
+      failure: null,
+      bestNearMiss: null,
+      message: `No timetable can satisfy all your no-class rules — these conflict-free options break the fewest (best: ${best} class hour${best === 1 ? "" : "s"} on an excluded day/window).`,
+    };
+  }
+
+  // 3. Impossible: not even a conflict-free timetable exists.
+  return {
+    outcome: "impossible",
+    solutions: [],
+    truncated: false,
+    failure: strict,
+    bestNearMiss: strict.nearMisses[0] ?? null,
+    message:
+      "Not possible: no conflict-free timetable exists for this selection, even ignoring the no-class rules.",
+  };
 }
 
 /* ------------------------------------------------------------------ */

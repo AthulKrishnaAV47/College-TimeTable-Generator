@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildPlacements, solve, autoSelectCourses, computeMetrics } from "@/lib/solver";
-import type { Course, EligibleSubject, Section, TimeCell } from "@/lib/types";
+import {
+  buildPlacements,
+  solve,
+  autoSelectCourses,
+  computeMetrics,
+  solveWithFallback,
+  placementRuleViolations,
+  solutionRuleViolations,
+} from "@/lib/solver";
+import type { Course, EligibleSubject, ScheduleConstraints, Section, TimeCell } from "@/lib/types";
 import { cellKey } from "@/lib/time";
 
 function sec(
@@ -351,5 +359,69 @@ describe("auto subject selection (§3.3)", () => {
     });
     expect(r.ok).toBe(false);
     expect(r.failure?.blockingPairs.length ?? 0).toBeGreaterThan(0);
+  });
+});
+
+describe("no-class rule fallback (strict → relaxed → impossible)", () => {
+  const prefs = { sectionMode: "alternative" as const, preferredFaculty: null };
+  const noSaturday: ScheduleConstraints = { excludedDays: ["Saturday"], excludedRanges: [] };
+
+  it("returns strict when every no-class rule can be respected", () => {
+    const a = course("19XX101", "A", 3, [sec("T1-A1", ["F1"], [["Monday", "10:00", "12:00"]])]);
+    const r = solveWithFallback([a], { "19XX101": prefs }, { constraints: noSaturday });
+    expect(r.outcome).toBe("strict");
+    expect(r.solutions.length).toBeGreaterThan(0);
+    expect(r.failure).toBeNull();
+  });
+
+  it("falls back to the closest conflict-free timetable when rules are unsatisfiable", () => {
+    // 19XX101 only runs on Saturday — excluding Saturday makes strict unsolvable,
+    // but a conflict-free (rule-breaking) schedule still exists.
+    const a = course("19XX101", "A", 3, [
+      sec("T1-A1", ["F1"], [["Saturday", "10:00", "11:00"], ["Saturday", "11:00", "12:00"]]),
+    ]);
+    const b = course("19XX102", "B", 3, [sec("T1-B1", ["F2"], [["Monday", "10:00", "12:00"]])]);
+    const r = solveWithFallback([a, b], { "19XX101": prefs, "19XX102": prefs }, {
+      constraints: noSaturday,
+    });
+    expect(r.outcome).toBe("relaxed");
+    expect(r.solutions.length).toBeGreaterThan(0);
+    expect(r.failure).toBeNull();
+    // The best option breaks exactly the two Saturday hours — and nothing else.
+    expect(solutionRuleViolations(r.solutions[0].placements, noSaturday)).toBe(2);
+    expect(r.solutions[0].assignment["19XX101"]).toContain("T1-A1");
+    // It must still be 100% conflict-free.
+    const keys = Object.values(r.solutions[0].placements).flatMap((p) => p.busy.map(cellKey));
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(r.message).toMatch(/closest|fewest/i);
+  });
+
+  it("reports impossible but returns the best near-miss schedule", () => {
+    const a = course("19XX101", "A", 3, [sec("T1-A1", ["F1"], [["Monday", "08:00", "10:00"]])]);
+    const b = course("19XX102", "B", 3, [sec("T1-B1", ["F2"], [["Monday", "09:00", "10:00"]])]);
+    const r = solveWithFallback([a, b], { "19XX101": prefs, "19XX102": prefs });
+    expect(r.outcome).toBe("impossible");
+    expect(r.solutions).toHaveLength(0);
+    expect(r.failure).not.toBeNull();
+    expect(r.bestNearMiss).not.toBeNull();
+    expect(r.bestNearMiss!.conflictHours).toBeGreaterThan(0);
+    expect(Object.keys(r.bestNearMiss!.assignment).sort()).toEqual(["19XX101", "19XX102"]);
+    expect(r.bestNearMiss!.clashes.length).toBeGreaterThan(0);
+    expect(r.message).toMatch(/Not possible/i);
+  });
+
+  it("counts excluded-day and excluded-window violations per placement", () => {
+    const a = course("19XX101", "A", 3, [
+      sec("T1-A1", ["F1"], [["Saturday", "10:00", "11:00"], ["Monday", "15:00", "16:00"]]),
+    ]);
+    const p = buildPlacements(a, prefs)[0];
+    expect(
+      placementRuleViolations(p, {
+        excludedDays: ["Saturday"],
+        excludedRanges: [{ start: "15:00", end: "17:00" }],
+      })
+    ).toBe(2);
+    expect(placementRuleViolations(p, noSaturday)).toBe(1);
+    expect(placementRuleViolations(p, null)).toBe(0);
   });
 });

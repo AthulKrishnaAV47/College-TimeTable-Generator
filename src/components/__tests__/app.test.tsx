@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TimetableApp from "@/components/TimetableApp";
+import LoginPage from "@/components/LoginPage";
+import Home from "@/app/page";
 import { SAMPLE_SLOT_SHEET, SAMPLE_ELIGIBILITY } from "@/lib/sample";
 
 /**
@@ -84,4 +86,51 @@ describe("TimetableApp wizard", () => {
     await user.click(screen.getByRole("button", { name: /Drafts & compare/ }));
     expect(screen.getByText(/Saved drafts \(1\)/)).toBeTruthy();
   }, 30000);
+});
+
+describe("LoginPage (demo sign-in)", () => {
+  afterEach(cleanup);
+
+  it("validates input and emits the signed-in user", async () => {
+    const user = userEvent.setup();
+    const onLogin = vi.fn();
+    render(<LoginPage onLogin={onLogin} />);
+
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    expect(screen.getByText(/enter your name/i)).toBeTruthy();
+
+    await user.type(screen.getByLabelText("Your name"), "Athul");
+    await user.type(screen.getByLabelText("Email"), "athul@college.edu");
+    await user.type(screen.getByLabelText("Password"), "secret1");
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(onLogin).toHaveBeenCalledWith({ name: "Athul", email: "athul@college.edu" });
+  });
+
+  it("gates the wizard behind the login screen and supports sign-out", async () => {
+    window.localStorage.clear();
+    const user = userEvent.setup();
+    render(<Home />);
+
+    // Login screen first (wizard hidden)
+    expect(screen.getByLabelText("Your name")).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 3, name: /File A/ })).toBeNull();
+
+    await user.type(screen.getByLabelText("Your name"), "Student");
+    await user.type(screen.getByLabelText("Email"), "s@college.edu");
+    await user.type(screen.getByLabelText("Password"), "pass");
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+    // Wizard appears after sign-in
+    expect(
+      await screen.findByRole("heading", { level: 3, name: /File A — MyCamu term slot sheet/ })
+    ).toBeTruthy();
+    expect(screen.getByText("Student")).toBeTruthy();
+
+    // Sign out returns to the login screen
+    await user.click(screen.getByRole("button", { name: /sign out/i }));
+    expect(await screen.findByLabelText("Your name")).toBeTruthy();
+
+    window.localStorage.clear();
+  });
 });

@@ -269,3 +269,23 @@ export interface DraftSnapshot {
   /** fully resolved placements so drafts render without re-parsing */
   placements: Record<string, Placement>;
 }
+
+/* ------------------------------------------------------------------ */
+/* No-class rule fallback outcomes                                     */
+/* ------------------------------------------------------------------ */
+
+/** How the solver resolved the no-class rules for the current selection. */
+export type SolveOutcome =
+  /** a conflict-free timetable that respects every rule exists */
+  | "strict"
+  /** no fully rule-respecting timetable exists — options break the fewest rule hours */
+  | "relaxed"
+  /** no conflict-free timetable exists at all — only a best near-miss is shown */
+  | "impossible";
+
+/** A renderable best-effort schedule for the "impossible" outcome. */
+export interface NearMissSchedule {
+  placements: Record<string, Placement>;
+  clashes: NearMissClash[];
+  conflictHours: number;
+}
