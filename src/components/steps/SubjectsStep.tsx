@@ -103,6 +103,7 @@ export default function SubjectsStep({
         minSBC: s.minSBC,
         minFC: s.minFC,
         rankBy: state.rankBy,
+        constraints: state.constraints,
       });
       setAutoResult(result);
       onAutoResult(result, result.ok ? result.chosen.map((c) => c.courseCode) : null);
@@ -160,7 +161,7 @@ export default function SubjectsStep({
             )}
             {summary.excludedByYear.length > 0 && (
               <p>
-                <Badge tone="slate">not for Year {state.profile.year}</Badge>{" "}
+                <Badge tone="slate">no matching year row in File B</Badge>{" "}
                 {summary.excludedByYear.join(", ")}
               </p>
             )}

@@ -188,14 +188,46 @@ describe("eligibility intersection (§3.2)", () => {
     expect(summary.notInEligibilityTable).toEqual(["QNX RTOS"]);
   });
 
-  it("filters for Years II & III", () => {
+  it("filters for Years II & III — including Year I subjects", () => {
     const summary = buildEligibility(courses, rows, {
       year: "II & III",
       termLabel: "Year II & III - Term 1",
       completedCourseCodes: [],
     });
+    const codes = [...summary.sbc, ...summary.fc].map((c) => c.courseCode).sort();
+    // Own-year rows (19CS305, 19AI410) plus every Year I subject offered this term.
+    expect(codes.sort()).toEqual(
+      [
+        "19AI301",
+        "19AI305",
+        "19AI410",
+        "19CS305",
+        "19CY801",
+        "19EE305",
+        "19HS801",
+        "19JP301",
+      ].sort()
+    );
+    // Own-year rows are authoritative for SBC/FC; Year I rows fill the rest.
+    expect(summary.fc.map((c) => c.courseCode).sort()).toEqual(
+      ["19AI305", "19AI410", "19CS305", "19CY801", "19EE305", "19HS801"].sort()
+    );
+    expect(summary.sbc.map((c) => c.courseCode).sort()).toEqual(["19AI301", "19JP301"].sort());
+    // 19DE301 has a II & III row but isn't offered this term → absent (not excluded-by-year).
+    // Nothing offered carries a File B row that misses both year levels → excludedByYear is empty.
+    expect(summary.excludedByYear).toEqual([]);
+    expect(summary.notInEligibilityTable).toEqual(["QNX RTOS"]);
+  });
+
+  it("still keeps Year I students out of II & III-only courses", () => {
+    const summary = buildEligibility(courses, rows, {
+      year: "I",
+      termLabel: "Year I - Term 2",
+      completedCourseCodes: [],
+    });
     const codes = [...summary.sbc, ...summary.fc].map((c) => c.courseCode);
-    expect(codes.sort()).toEqual(["19CS305", "19AI410"].sort());
+    expect(codes).not.toContain("19AI410"); // II & III only
+    expect(summary.excludedByYear).toEqual(["19AI410"]);
   });
 
   it("normalizes codes", () => {

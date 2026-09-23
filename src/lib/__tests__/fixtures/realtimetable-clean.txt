@@ -1,0 +1,176 @@
+19AI305 [3 Credits]
+ENGINEERING SCIENCES - ENGINEERING SCIENCES
+Course overview
+Advanced C Programming
+UG - 04, T1-I19, AI - KRISHNAMOORTHY J
+Date: 16-07-2026 to 26-09-2026
+Friday: 15:00 - 16:0016:00 - 17:00
+Monday: 08:00 - 09:0009:00 - 10:00
+Thursday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 13:00 - 14:0014:00 - 15:00
+UG - 04, T1-J18, AI - ALAGUMANI S
+Date: 16-07-2026 to 26-09-2026
+Friday: 10:00 - 11:0011:00 - 12:00
+Monday: 10:00 - 11:0011:00 - 12:00
+Saturday: 15:00 - 16:0016:00 - 17:00
+Wednesday: 15:00 - 16:0016:00 - 17:00
+UG - 04, T1-N16, AI - ALAGUMANI S
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Monday: 13:00 - 14:0014:00 - 15:00
+Saturday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 15:00 - 16:0016:00 - 17:00
+UG - 04, T1-V11, AI - Kiruthika S S
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Monday: 08:00 - 09:0009:00 - 10:00
+Thursday: 08:00 - 09:0009:00 - 10:00
+Tuesday: 13:00 - 14:0014:00 - 15:00
+UG - 04, T1-N18, AI - Kiruthika S S
+Date: 16-07-2026 to 26-09-2026
+Friday: 10:00 - 11:0011:00 - 12:00
+Thursday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 10:00 - 11:0011:00 - 12:00
+Wednesday: 10:00 - 11:0011:00 - 12:00
+UG - 04, T1-N17, AI - Kumaravelu R
+Date: 16-07-2026 to 26-09-2026
+Friday: 08:00 - 09:0009:00 - 10:00
+Thursday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 13:00 - 14:0014:00 - 15:00
+Wednesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-D17, AI - KRISHNAMOORTHY J
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Thursday: 15:00 - 16:0016:00 - 17:00
+Tuesday: 10:00 - 11:0011:00 - 12:00
+Wednesday: 10:00 - 11:0011:00 - 12:00
+UG - 04, T1-C20, AI - Nagendran k
+Date: 16-07-2026 to 26-09-2026
+Friday: 15:00 - 16:0016:00 - 17:00
+Saturday: 13:00 - 14:0014:00 - 15:00
+Thursday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 15:00 - 16:0016:00 - 17:00
+UG - 04, T1-P19, AI - Kumaravelu R
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Saturday: 08:00 - 09:0009:00 - 10:00
+Thursday: 08:00 - 09:0009:00 - 10:00
+Tuesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-T10, AI - Nagendran k
+Date: 16-07-2026 to 26-09-2026
+Friday: 10:00 - 11:0011:00 - 12:00
+Thursday: 10:00 - 11:0011:00 - 12:00
+Tuesday: 10:00 - 11:0011:00 - 12:00
+Wednesday: 10:00 - 11:0011:00 - 12:00
+
+19AI541 [4 Credits]
+PROFESSIONAL ELECTIVE - PROFESSIONAL ELECTIVE PE
+Course overview
+Cloud Computing
+UG - 04, T1-R17, AI - SARATHI SUBRAMANI
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Monday: 10:00 - 11:0011:00 - 12:00
+Saturday: 15:00 - 16:0016:00 - 17:00
+Tuesday: 15:00 - 16:0016:00 - 17:00
+UG - 04, T1-P14, AI - Balaji Palani
+Date: 16-07-2026 to 26-09-2026
+Friday: 15:00 - 16:0016:00 - 17:00
+Monday: 10:00 - 11:0011:00 - 12:00
+Saturday: 15:00 - 16:0016:00 - 17:00
+Tuesday: 10:00 - 11:0011:00 - 12:00
+UG - 04, T1-X10, AI - Balaji Palani
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Monday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 15:00 - 16:0016:00 - 17:00
+Wednesday: 15:00 - 16:0016:00 - 17:00
+UG - 04, T1-D8, AI - SARATHI SUBRAMANI
+Date: 16-07-2026 to 26-09-2026
+Friday: 15:00 - 16:0016:00 - 17:00
+Monday: 15:00 - 16:0016:00 - 17:00
+Saturday: 08:00 - 09:0009:00 - 10:00
+Tuesday: 08:00 - 09:0009:00 - 10:00
+Thursday: 15:00 - 16:0016:00 - 17:00
+
+19AI413 [3 Credits]
+PROFESSIONAL ELECTIVE - PROFESSIONAL ELECTIVE PE
+Course overview
+Deep Learning and its Applications
+UG - 04, T1-J17, AI - SREE LAKSHMI S
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Monday: 08:00 - 09:0009:00 - 10:00
+Thursday: 08:00 - 09:0009:00 - 10:00
+Tuesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-B17, AI - SREE LAKSHMI S
+Date: 16-07-2026 to 26-09-2026
+Monday: 10:00 - 11:0011:00 - 12:00
+Thursday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 13:00 - 14:0014:00 - 15:00
+Wednesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-L16, AI - MICHAEL MAHESH K
+Date: 16-07-2026 to 26-09-2026
+Friday: 10:00 - 11:0011:00 - 12:00
+Monday: 08:00 - 09:0009:00 - 10:00
+Saturday: 15:00 - 16:0016:00 - 17:00
+Thursday: 10:00 - 11:0011:00 - 12:00
+
+19CS405 [4 Credits]
+PROFESSIONAL CORE - PROFESSIONAL CORE
+Course overview
+Operating System
+UG - 04, T1-A32, CSE - Sujatha Elumalai
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Monday: 08:00 - 09:0009:00 - 10:00
+Saturday: 13:00 - 14:0014:00 - 15:00
+Thursday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-R20, CSE - RAJASARANYAKUMARI R
+Date: 16-07-2026 to 26-09-2026
+Monday: 13:00 - 14:0014:00 - 15:00
+Saturday: 08:00 - 09:0009:00 - 10:00
+Thursday: 08:00 - 09:0009:00 - 10:00
+Tuesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-M18, CSE - ARUL DALTON G
+Date: 16-07-2026 to 26-09-2026
+Friday: 13:00 - 14:0014:00 - 15:00
+Monday: 08:00 - 09:0009:00 - 10:00
+Saturday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-M16, CSE - Kolli Amos Daniel
+Date: 16-07-2026 to 26-09-2026
+Friday: 15:00 - 16:0016:00 - 17:00
+Monday: 15:00 - 16:0016:00 - 17:00
+Tuesday: 13:00 - 14:0014:00 - 15:00
+Wednesday: 15:00 - 16:0016:00 - 17:00
+UG - 04, T1-D16, CSE - ARUL DALTON G
+Date: 16-07-2026 to 26-09-2026
+Friday: 10:00 - 11:0011:00 - 12:00
+Monday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 13:00 - 14:0014:00 - 15:00
+Wednesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-Q19, CSE - Kolli Amos Daniel
+Date: 16-07-2026 to 26-09-2026
+Monday: 13:00 - 14:0014:00 - 15:00
+Saturday: 15:00 - 16:0016:00 - 17:00
+Tuesday: 15:00 - 16:0016:00 - 17:00
+Wednesday: 10:00 - 11:0011:00 - 12:00
+UG - 04, T1-V10, CSE - Sujatha Elumalai
+Date: 16-07-2026 to 26-09-2026
+Friday: 08:00 - 09:0009:00 - 10:00
+Monday: 13:00 - 14:0014:00 - 15:00
+Thursday: 13:00 - 14:0014:00 - 15:00
+Wednesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-H18, CSE - RAJASARANYAKUMARI R
+Date: 16-07-2026 to 26-09-2026
+Saturday: 10:00 - 11:0011:00 - 12:00
+Thursday: 13:00 - 14:0014:00 - 15:00
+Tuesday: 13:00 - 14:0014:00 - 15:00
+Wednesday: 08:00 - 09:0009:00 - 10:00
+UG - 04, T1-J16, CSE - Gowri Ganesh N S
+Date: 16-07-2026 to 26-09-2026
+Friday: 10:00 - 11:0011:00 - 12:00
+Saturday: 08:00 - 09:0009:00 - 10:00
+Thursday: 08:00 - 09:0009:00 - 10:00
+Tuesday: 13:00 - 14:0014:00 - 15:00

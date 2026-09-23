@@ -74,6 +74,25 @@ export interface EligibilityRow {
 
 export type StudentYear = EligibilityYear;
 
+/** A time window no class may overlap, e.g. 15:00–17:00 ("no 3–5 class"). */
+export interface ExcludedRange {
+  /** "HH:MM" */
+  start: string;
+  /** "HH:MM" */
+  end: string;
+}
+
+/**
+ * Hard no-class rules (§3.5 input filters): the solver may only use
+ * placements whose cells avoid these days and time windows entirely.
+ */
+export interface ScheduleConstraints {
+  /** weekdays on which no class may be scheduled, e.g. ["Saturday"] */
+  excludedDays: Weekday[];
+  /** windows that no class may overlap on any day */
+  excludedRanges: ExcludedRange[];
+}
+
 export interface StudentProfile {
   year: StudentYear;
   /** free text, e.g. "Year I - Term 2" */
@@ -114,6 +133,8 @@ export interface SolverOptions {
   maxNodes?: number;
   /** ranking preference */
   rankBy?: RankPreference;
+  /** hard no-class day/time rules */
+  constraints?: ScheduleConstraints;
 }
 
 export type RankPreference = "fewest-gaps" | "most-free-days" | "earliest-finish" | "preferred-faculty";
@@ -151,6 +172,29 @@ export interface BlockingPair {
   reason: string;
 }
 
+/** One clashing block between two sections of a near-miss schedule. */
+export interface NearMissClash {
+  courseA: string;
+  sectionA: string;
+  courseB: string;
+  sectionB: string;
+  /** e.g. ["Saturday 15:00-17:00"] */
+  windows: string[];
+}
+
+/**
+ * A complete (non-solution) assignment with the fewest overlapping hours:
+ * shown when the solver fails so the student can see exactly which blocks
+ * are in the way (and spot garbled extraction artifacts).
+ */
+export interface NearMiss {
+  /** courseCode -> placement id */
+  assignment: Record<string, string>;
+  /** total overlapping 1-hour cells across the assignment */
+  conflictHours: number;
+  clashes: NearMissClash[];
+}
+
 export interface SolverFailure {
   ok: false;
   reason: "no-solution";
@@ -158,6 +202,11 @@ export interface SolverFailure {
   impossibleCourses: { courseCode: string; reason: string }[];
   /** pairs of courses with zero mutually-compatible placements */
   blockingPairs: BlockingPair[];
+  /**
+   * Closest full assignments (fewest overlapping hours) with the exact
+   * clashing blocks named — makes "no solution" actionable.
+   */
+  nearMisses: NearMiss[];
   message: string;
 }
 
@@ -219,4 +268,24 @@ export interface DraftSnapshot {
   metrics: SolutionMetrics;
   /** fully resolved placements so drafts render without re-parsing */
   placements: Record<string, Placement>;
+}
+
+/* ------------------------------------------------------------------ */
+/* No-class rule fallback outcomes                                     */
+/* ------------------------------------------------------------------ */
+
+/** How the solver resolved the no-class rules for the current selection. */
+export type SolveOutcome =
+  /** a conflict-free timetable that respects every rule exists */
+  | "strict"
+  /** no fully rule-respecting timetable exists — options break the fewest rule hours */
+  | "relaxed"
+  /** no conflict-free timetable exists at all — only a best near-miss is shown */
+  | "impossible";
+
+/** A renderable best-effort schedule for the "impossible" outcome. */
+export interface NearMissSchedule {
+  placements: Record<string, Placement>;
+  clashes: NearMissClash[];
+  conflictHours: number;
 }

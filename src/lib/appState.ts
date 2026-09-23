@@ -1,8 +1,11 @@
 import type {
   Course,
   EligibilityRow,
+  NearMissSchedule,
   RankPreference,
+  ScheduleConstraints,
   ScheduleSolution,
+  SolveOutcome,
   SolverFailure,
   StudentProfile,
   CoursePreferences,
@@ -43,11 +46,17 @@ export interface AppState {
   autoChosen: string[] | null;
   autoLog: { selected: string[]; outcome: "sat" | "unsat"; note: string }[] | null;
   coursePrefs: Record<string, CoursePreferences>;
+  /** hard no-class rules: excluded days and time windows */
+  constraints: ScheduleConstraints;
   rankBy: RankPreference;
   solutions: ScheduleSolution[] | null;
   solutionIdx: number;
   truncatedSearch: boolean;
   failure: SolverFailure | null;
+  /** how the solver handled the no-class rules for the last search */
+  solveOutcome: SolveOutcome | null;
+  /** renderable best-effort schedule when outcome === "impossible" */
+  nearMiss: NearMissSchedule | null;
 }
 
 export const DEFAULT_STATE: AppState = {
@@ -61,11 +70,14 @@ export const DEFAULT_STATE: AppState = {
   autoChosen: null,
   autoLog: null,
   coursePrefs: {},
+  constraints: { excludedDays: [], excludedRanges: [] },
   rankBy: "fewest-gaps",
   solutions: null,
   solutionIdx: 0,
   truncatedSearch: false,
   failure: null,
+  solveOutcome: null,
+  nearMiss: null,
 };
 
 export const STEPS = [

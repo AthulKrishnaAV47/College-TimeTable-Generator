@@ -43,8 +43,8 @@ const DAY_LINE_RE = /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)
 const TIME_RANGE_RE = /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/g;
 
 // Section line: "<Batch>, <SlotCode>, <Dept> - <Faculty...>"
-// SlotCode is the 2nd comma part, e.g. "T1-P3" / "T1-L3" / "T1-V5" (or "P3").
-const SLOT_CODE_RE = /^[A-Za-z]{1,3}\d+(\s*-\s*[A-Za-z]{0,3}\d+)?$/;
+// SlotCode is the 2nd comma part, e.g. "T1-P3" / "T1-L3" / "T1-BLENDED"
+const SLOT_CODE_RE = /^[A-Za-z]{1,3}\d+(?:-BLENDED(?:-\d+)?)?(?:\s*-\s*[A-Za-z]{0,3}\d+)?$/i;
 
 export function parseSectionLine(line: string): {
   batch: string;
@@ -250,6 +250,24 @@ export function parseSlotSheet(text: string): SlotSheetParseResult {
   // Post-process sections
   for (const course of byCode.values()) {
     for (const s of course.sections) {
+      // Exact duplicate cells within one section are extraction artifacts
+      // (repeated text runs in the PDF) — a section cannot meet the same
+      // hour twice. De-duplicate and flag.
+      const seenKeys = new Set<string>();
+      const unique: typeof s.weeklyCells = [];
+      for (const c of s.weeklyCells) {
+        const k = `${c.day}|${c.startTime}|${c.endTime}`;
+        if (!seenKeys.has(k)) {
+          seenKeys.add(k);
+          unique.push(c);
+        }
+      }
+      if (unique.length < s.weeklyCells.length) {
+        warnings.push(
+          `${course.courseCode} ${s.slotCode}: ${s.weeklyCells.length - unique.length} duplicate time cell(s) removed — the PDF text layer repeated them. If this section still shows more hours than the real slot sheet, the file is two-column and a neighbour's blocks may have bled in; re-upload it (the extractor reconstructs columns) or paste corrected text.`
+        );
+      }
+      s.weeklyCells = unique;
       s.weeklyHours = s.weeklyCells.length;
       s.selfPaced =
         s.weeklyCells.length === 0 || s.weeklyCells.every((c) => isPlaceholderCell(c));

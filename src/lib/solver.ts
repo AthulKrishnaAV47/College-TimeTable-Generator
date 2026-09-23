@@ -2,14 +2,18 @@ import {
   type BlockingPair,
   type Course,
   type CoursePreferences,
+  type NearMiss,
+  type NearMissClash,
   type Placement,
   type RankPreference,
+  type ScheduleConstraints,
   type ScheduleSolution,
+  type SolveOutcome,
   type SolverFailure,
   type SolverResult,
   type TimeCell,
 } from "./types";
-import { cellsOverlap, isPlaceholderCell, timeToMinutes } from "./time";
+import { cellsOverlap, isPlaceholderCell, mergeCells, rangesOverlap, timeToMinutes } from "./time";
 import { normCode } from "./eligibility";
 
 /* ------------------------------------------------------------------ */
@@ -58,6 +62,26 @@ export function realCells(sections: { weeklyCells: TimeCell[] }[]): TimeCell[] {
 }
 
 /**
+ * Hard no-class rules: a set of cells is allowed only if none of it falls on
+ * an excluded day or overlaps an excluded time window (partial overlaps
+ * count — a 14:00–16:00 class is out when 15:00–17:00 is excluded).
+ * Self-paced placeholder cells never reach this check (they're not in busy
+ * sets), so administrative-slot courses ignore constraints by design.
+ */
+export function cellsAllowed(busy: TimeCell[], c?: ScheduleConstraints | null): boolean {
+  if (!c) return true;
+  const days = c.excludedDays ?? [];
+  const ranges = c.excludedRanges ?? [];
+  for (const cell of busy) {
+    if (days.includes(cell.day)) return false;
+    for (const r of ranges) {
+      if (rangesOverlap(cell.startTime, cell.endTime, r.start, r.end)) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Merge a set of sections into one busy list. Returns null when the package
  * is internally impossible (two of its own sections overlap — the student
  * cannot attend both).
@@ -74,11 +98,13 @@ function mergeBusy(sections: { weeklyCells: TimeCell[] }[]): TimeCell[] | null {
 
 /**
  * Placements for every course, plus the reason a course has no valid
- * placement at all (e.g. a self-overlapping mandatory combo).
+ * placement at all (structurally, or because every candidate violates the
+ * no-class day/time constraints).
  */
 export function buildAllPlacements(
   courses: Course[],
-  prefs: Record<string, CoursePreferences>
+  prefs: Record<string, CoursePreferences>,
+  constraints?: ScheduleConstraints | null
 ): { placements: Map<string, Placement[]>; impossible: { courseCode: string; reason: string }[] } {
   const placements = new Map<string, Placement[]>();
   const impossible: { courseCode: string; reason: string }[] = [];
@@ -89,16 +115,19 @@ export function buildAllPlacements(
       preferredFaculty: null,
     };
     const built = buildPlacements(course, p);
-    if (built.length === 0) {
+    const allowed = built.filter((b) => cellsAllowed(b.busy, constraints));
+    if (allowed.length === 0) {
       impossible.push({
         courseCode: course.courseCode,
         reason:
-          course.sections.length === 0
-            ? "no sections were parsed for this course"
-            : "its mandatory combo contains two sections that overlap each other",
+          built.length === 0
+            ? course.sections.length === 0
+              ? "no sections were parsed for this course"
+              : "its mandatory combo contains two sections that overlap each other"
+            : "every one of its sections falls on an excluded day or inside an excluded time window (no-class rules)",
       });
     }
-    placements.set(code, built);
+    placements.set(code, allowed);
   }
   return { placements, impossible };
 }
@@ -136,11 +165,17 @@ function orderPlacement(p: Placement, pref: string | null): number {
 export function solve(
   courses: Course[],
   prefs: Record<string, CoursePreferences>,
-  options: { maxSolutions?: number; maxNodes?: number; rankBy?: RankPreference } = {}
+  options: {
+    maxSolutions?: number;
+    maxNodes?: number;
+    rankBy?: RankPreference;
+    constraints?: ScheduleConstraints;
+  } = {}
 ): SolverResult {
   const maxSolutions = options.maxSolutions ?? 50;
   const maxNodes = options.maxNodes ?? 200_000;
   const rankBy = options.rankBy ?? "fewest-gaps";
+  const constraints = options.constraints ?? null;
 
   const courseCodes = courses.map((c) => normCode(c.courseCode));
   const prefByCode = new Map<string, CoursePreferences>();
@@ -149,10 +184,10 @@ export function solve(
     prefByCode.set(code, prefs[code] ?? { sectionMode: c.sectionMode, preferredFaculty: null });
   }
 
-  const { placements: optionsByCode, impossible } = buildAllPlacements(courses, prefs);
+  const { placements: optionsByCode, impossible } = buildAllPlacements(courses, prefs, constraints);
 
   if (impossible.length > 0) {
-    return noSolutionResult(courses, optionsByCode, impossible);
+    return noSolutionResult(courses, optionsByCode, impossible, constraints);
   }
 
   const node: SearchNode = {
@@ -232,7 +267,7 @@ export function solve(
   search();
 
   if (solutions.length === 0) {
-    return noSolutionResult(courses, optionsByCode, impossible);
+    return noSolutionResult(courses, optionsByCode, impossible, constraints);
   }
   solutions.sort((a, b) => a.score - b.score);
   return { ok: true, solutions, truncated, nodesExplored: nodes };
@@ -324,10 +359,115 @@ function pairCompatible(a: Placement[], b: Placement[]): boolean {
   return false;
 }
 
+/** "Saturday 15:00–17:00" style windows for the cells two placements share. */
+function clashWindows(a: TimeCell[], b: TimeCell[]): string[] {
+  const wins: TimeCell[] = [];
+  for (const ca of a) {
+    for (const cb of b) {
+      if (!cellsOverlap(ca, cb)) continue;
+      const start =
+        timeToMinutes(ca.startTime) >= timeToMinutes(cb.startTime) ? ca.startTime : cb.startTime;
+      const end = timeToMinutes(ca.endTime) <= timeToMinutes(cb.endTime) ? ca.endTime : cb.endTime;
+      wins.push({ day: ca.day, startTime: start, endTime: end });
+    }
+  }
+  return mergeCells(wins).map((w) => `${w.day} ${w.startTime}–${w.endTime}`);
+}
+
+function placementLabel(p: Placement): string {
+  return p.sections.map((s) => s.slotCode).join("+") || "combo";
+}
+
+/**
+ * Bounded branch-and-bound over full assignments minimizing total
+ * overlapping hours, for the "closest schedules" failure report.
+ */
+export function findNearMisses(
+  courses: Course[],
+  optionsByCode: Map<string, Placement[]>,
+  maxResults = 3,
+  maxNodes = 150_000
+): NearMiss[] {
+  const codes = courses
+    .map((c) => normCode(c.courseCode))
+    .filter((c) => (optionsByCode.get(c)?.length ?? 0) > 0);
+  if (codes.length < 2) return [];
+  const order = [...codes].sort(
+    (a, b) => (optionsByCode.get(a)?.length ?? 0) - (optionsByCode.get(b)?.length ?? 0)
+  );
+
+  const best: NearMiss[] = [];
+  let nodes = 0;
+
+  const keptWorst = (): number =>
+    best.length >= maxResults ? best[best.length - 1].conflictHours : Infinity;
+
+  const insert = (nm: NearMiss) => {
+    if (nm.conflictHours === 0) return;
+    if (nm.conflictHours > keptWorst()) return;
+    const idx = best.findIndex((b) => b.conflictHours > nm.conflictHours);
+    if (idx >= 0) best.splice(idx, 0, nm);
+    else best.push(nm);
+    if (best.length > maxResults) best.length = maxResults;
+  };
+
+  const finish = (assignment: Map<string, Placement>): void => {
+    const placements = [...assignment.values()];
+    const clashes: NearMissClash[] = [];
+    let total = 0;
+    for (let i = 0; i < placements.length; i++) {
+      for (let j = i + 1; j < placements.length; j++) {
+        const a = placements[i];
+        const b = placements[j];
+        const windows = clashWindows(a.busy, b.busy);
+        if (windows.length === 0) continue;
+        const hours = a.busy.filter((ca) => b.busy.some((cb) => cellsOverlap(ca, cb))).length;
+        total += hours;
+        clashes.push({
+          courseA: a.courseCode,
+          sectionA: placementLabel(a),
+          courseB: b.courseCode,
+          sectionB: placementLabel(b),
+          windows,
+        });
+      }
+    }
+    if (total === 0) return;
+    const assignmentOut: Record<string, string> = {};
+    for (const [code, p] of assignment) assignmentOut[code] = p.id;
+    insert({ assignment: assignmentOut, conflictHours: total, clashes });
+  };
+
+  const dfs = (
+    depth: number,
+    assignment: Map<string, Placement>,
+    busy: TimeCell[],
+    conflicts: number
+  ) => {
+    if (nodes++ > maxNodes) return;
+    if (conflicts > keptWorst()) return; // can't beat the kept set
+    if (depth === order.length) {
+      finish(new Map(assignment));
+      return;
+    }
+    const code = order[depth];
+    for (const p of optionsByCode.get(code) ?? []) {
+      const added = p.busy.filter((c) => busy.some((b) => cellsOverlap(c, b))).length;
+      assignment.set(code, p);
+      dfs(depth + 1, assignment, [...busy, ...p.busy], conflicts + added);
+      assignment.delete(code);
+    }
+  };
+
+  dfs(0, new Map(), [], 0);
+  return best;
+}
+
 function noSolutionResult(
   courses: Course[],
   optionsByCode: Map<string, Placement[]>,
-  impossible: { courseCode: string; reason: string }[]
+  impossible: { courseCode: string; reason: string }[],
+  constraints?: ScheduleConstraints | null
 ): SolverFailure {
   const codes = courses.map((c) => normCode(c.courseCode));
   const impossibleCourses: { courseCode: string; reason: string }[] = [...impossible];
@@ -374,12 +514,143 @@ function noSolutionResult(
         .join("; ")
     );
   }
+  const constraintsActive =
+    !!constraints &&
+    ((constraints.excludedDays?.length ?? 0) > 0 || (constraints.excludedRanges?.length ?? 0) > 0);
   const message =
     parts.length > 0
-      ? `No conflict-free timetable exists for this selection: ${parts.join(". ")}.`
-      : "No conflict-free timetable exists for this selection. Try dropping a subject or changing a mandatory/alternative toggle.";
+      ? `No conflict-free timetable exists for this selection: ${parts.join(". ")}.${constraintsActive ? " Relaxing the no-class day/time rules may also help." : ""}`
+      : `No conflict-free timetable exists for this selection. Try dropping a subject, changing a mandatory/alternative toggle${constraintsActive ? ", or relaxing the no-class day/time rules" : ""}.`;
 
-  return { ok: false, reason: "no-solution", impossibleCourses, blockingPairs, message };
+  const nearMisses = findNearMisses(courses, optionsByCode);
+  return { ok: false, reason: "no-solution", impossibleCourses, blockingPairs, nearMisses, message };
+}
+
+/* ------------------------------------------------------------------ */
+/* No-class rule fallback: strict → relaxed → impossible               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * How many of this placement's 1-hour cells break a no-class rule
+ * (excluded day, or overlap with an excluded time window).
+ */
+export function placementRuleViolations(
+  p: Placement,
+  c?: ScheduleConstraints | null
+): number {
+  if (!c) return 0;
+  let n = 0;
+  for (const cell of p.busy) {
+    if (c.excludedDays?.includes(cell.day)) {
+      n++;
+      continue;
+    }
+    for (const r of c.excludedRanges ?? []) {
+      if (rangesOverlap(cell.startTime, cell.endTime, r.start, r.end)) {
+        n++;
+        break;
+      }
+    }
+  }
+  return n;
+}
+
+/** Total rule-breaking hours across a solution's placements. */
+export function solutionRuleViolations(
+  placements: Record<string, Placement>,
+  c?: ScheduleConstraints | null
+): number {
+  return Object.values(placements).reduce((s, p) => s + placementRuleViolations(p, c), 0);
+}
+
+export interface FallbackSolveResult {
+  outcome: SolveOutcome;
+  /**
+   * "strict" → rule-respecting schedules; "relaxed" → conflict-free
+   * schedules sorted by fewest rule violations first (index 0 is the
+   * closest match); "impossible" → empty.
+   */
+  solutions: ScheduleSolution[];
+  truncated: boolean;
+  /** the strict-mode failure (diagnostics), always null for strict/relaxed */
+  failure: SolverFailure | null;
+  /** only for "impossible": the complete schedule with the fewest clashes */
+  bestNearMiss: NearMiss | null;
+  message: string;
+}
+
+/**
+ * Solves with the no-class rules as hard constraints; when that fails it
+ * degrades gracefully instead of dead-ending:
+ *
+ *  1. strict   — rules honored by every section (ideal).
+ *  2. relaxed  — rules couldn't all be met: search WITHOUT them, then rank
+ *                by fewest rule-breaking hours (so "one Saturday class" or
+ *                "one 3–5 class" beats a schedule that ignores the rules).
+ *                Every relaxed option is still 100% conflict-free.
+ *  3. impossible — not even a conflict-free timetable exists when the rules
+ *                are ignored: report it as not possible, but hand back the
+ *                complete schedule with the fewest overlapping hours so the
+ *                student still sees a concrete best attempt.
+ */
+export function solveWithFallback(
+  courses: Course[],
+  prefs: Record<string, CoursePreferences>,
+  options: {
+    maxSolutions?: number;
+    maxNodes?: number;
+    rankBy?: RankPreference;
+    constraints?: ScheduleConstraints;
+  } = {}
+): FallbackSolveResult {
+  const constraints = options.constraints ?? null;
+  const rankBy = options.rankBy ?? "fewest-gaps";
+
+  // 1. Strict: honor every no-class rule.
+  const strict = solve(courses, prefs, { ...options, rankBy });
+  if (strict.ok) {
+    return {
+      outcome: "strict",
+      solutions: strict.solutions,
+      truncated: strict.truncated,
+      failure: null,
+      bestNearMiss: null,
+      message: `Found ${strict.solutions.length} timetable${strict.solutions.length === 1 ? "" : "s"} that respect all your no-class rules.`,
+    };
+  }
+
+  // 2. Relaxed: ignore the rules, then rank by fewest rule violations.
+  const relaxed = solve(courses, prefs, {
+    rankBy,
+    maxSolutions: Math.max(options.maxSolutions ?? 50, 200),
+    maxNodes: options.maxNodes,
+  });
+  if (relaxed.ok) {
+    const ranked = [...relaxed.solutions]
+      .map((s) => ({ s, v: solutionRuleViolations(s.placements, constraints) }))
+      .sort((a, b) => a.v - b.v || a.s.score - b.s.score)
+      .map((x) => x.s);
+    const best = solutionRuleViolations(ranked[0].placements, constraints);
+    return {
+      outcome: "relaxed",
+      solutions: ranked,
+      truncated: relaxed.truncated,
+      failure: null,
+      bestNearMiss: null,
+      message: `No timetable can satisfy all your no-class rules — these conflict-free options break the fewest (best: ${best} class hour${best === 1 ? "" : "s"} on an excluded day/window).`,
+    };
+  }
+
+  // 3. Impossible: not even a conflict-free timetable exists.
+  return {
+    outcome: "impossible",
+    solutions: [],
+    truncated: false,
+    failure: strict,
+    bestNearMiss: strict.nearMisses[0] ?? null,
+    message:
+      "Not possible: no conflict-free timetable exists for this selection, even ignoring the no-class rules.",
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -398,6 +669,8 @@ export interface AutoSelectOptions {
   /** solver retry budget (default 30) */
   maxAttempts?: number;
   rankBy?: RankPreference;
+  /** hard no-class day/time rules, forwarded to every solve() attempt */
+  constraints?: ScheduleConstraints;
 }
 
 export interface AutoSelectResult {
@@ -428,13 +701,16 @@ export function autoSelectCourses(
   const attempts: AutoSelectResult["attempts"] = [];
   const maxAttempts = options.maxAttempts ?? 30;
 
+  // Constraint-aware option counts: courses with zero feasible placements
+  // (structurally or by no-class rules) are the likeliest bottlenecks and
+  // get dropped/swapped first.
+  const precomputed = buildAllPlacements(eligible, prefs, options.constraints).placements;
   const candidates: Candidate[] = eligible.map((c) => {
     const code = normCode(c.courseCode);
-    const mode = prefs[code]?.sectionMode ?? c.sectionMode;
     return {
       course: c as Course & { type?: "SBC" | "FC" },
       code,
-      optionCount: mode === "mandatory-combo" ? 1 : c.sections.length,
+      optionCount: precomputed.get(code)?.length ?? 0,
     };
   });
 
@@ -489,7 +765,11 @@ export function autoSelectCourses(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const courses = current.map((c) => c.course);
-    const result = solve(courses, prefs, { rankBy: options.rankBy, maxSolutions: 20 });
+    const result = solve(courses, prefs, {
+      rankBy: options.rankBy,
+      maxSolutions: 20,
+      constraints: options.constraints,
+    });
     const codes = courses.map((c) => c.courseCode);
     if (result.ok && result.solutions.length > 0) {
       attempts.push({ selected: codes, outcome: "sat", note: `attempt ${attempt + 1}` });

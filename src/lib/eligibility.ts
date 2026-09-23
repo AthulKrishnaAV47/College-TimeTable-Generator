@@ -16,6 +16,11 @@ export function normCode(code: string): string {
  *   File A (offered this term) ∩ File B rows matching the student's year,
  *   minus the completed-course list.
  *
+ * Year II & III students can also enroll in Year I subjects: their filter
+ * matches File B rows for BOTH "II & III" and "I". When a code carries rows
+ * for both year levels, the student's own-year row is authoritative for the
+ * SBC/FC classification.
+ *
  * File B does not encode term information; the term filter is exactly
  * "appears in File A". Duplicated File B rows (same code at several year
  * levels) are preserved and matched per-year.
@@ -30,10 +35,20 @@ export function buildEligibility(
   // code → type for the student's year (preserve File A order)
   const typeByCode = new Map<string, "SBC" | "FC">();
   const allCodes = new Set<string>();
+  // Pass 1: the student's own year rows (authoritative on conflicts).
   for (const r of rows) {
     allCodes.add(r.courseCode);
-    if (r.year === profile.year && !typeByCode.has(r.courseCode)) {
+    if (r.year === profile.year) {
       typeByCode.set(r.courseCode, r.type);
+    }
+  }
+  // Pass 2: Year II & III also inherit Year I rows for codes not already
+  // classified at their own level.
+  if (profile.year === "II & III") {
+    for (const r of rows) {
+      if (r.year === "I" && !typeByCode.has(r.courseCode)) {
+        typeByCode.set(r.courseCode, r.type);
+      }
     }
   }
 

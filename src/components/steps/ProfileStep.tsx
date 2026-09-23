@@ -72,8 +72,12 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
         <div className="grid gap-3 sm:grid-cols-2">
           {(
             [
-              { id: "I", title: "Year I", desc: "First-year eligibility rows" },
-              { id: "II & III", title: "Year II & III", desc: "Shared senior-year rows" },
+              { id: "I", title: "Year I", desc: "Year I eligibility rows only" },
+              {
+                id: "II & III",
+                title: "Year II & III",
+                desc: "Senior rows plus every Year I subject",
+              },
             ] as const
           ).map((opt) => (
             <button

@@ -1,21 +1,25 @@
 "use client";
 
-import { useMemo } from "react";
-import type { Course, CoursePreferences } from "@/lib/types";
-import { buildPlacements } from "@/lib/solver";
+import { useMemo, useState } from "react";
+import type { Course, CoursePreferences, ScheduleConstraints } from "@/lib/types";
+import { buildPlacements, cellsAllowed, realCells } from "@/lib/solver";
+import ConstraintsCard from "@/components/ConstraintsCard";
 import { Badge, Btn, Card, SectionTitle } from "@/components/ui";
 
 /**
  * Step 4 (§3.4): per-course section-mode confirmation. The parser's heuristic
  * (≤2 sections sharing the same faculty → mandatory combo) is pre-selected,
  * but every toggle stays overridable — the student knows their registration
- * system. A soft faculty preference feeds solution ranking.
+ * system. A soft faculty preference feeds solution ranking, and hard
+ * no-class day/time rules (constraints) filter what the solver may pick.
  */
 
 interface Props {
   enrolledCourses: Course[];
   coursePrefs: Record<string, CoursePreferences>;
+  constraints: ScheduleConstraints;
   onChangePrefs: (code: string, prefs: CoursePreferences) => void;
+  onChangeConstraints: (c: ScheduleConstraints) => void;
   onSolve: () => void;
   onBack: () => void;
 }
@@ -34,7 +38,9 @@ function fmtCells(cells: { day: string; startTime: string; endTime: string }[]):
 export default function SectionsStep({
   enrolledCourses,
   coursePrefs,
+  constraints,
   onChangePrefs,
+  onChangeConstraints,
   onSolve,
   onBack,
 }: Props) {
@@ -46,24 +52,35 @@ export default function SectionsStep({
           preferredFaculty: null,
         };
         const placements = buildPlacements(c, prefs);
+        const allowedCount = placements.filter((p) => cellsAllowed(p.busy, constraints)).length;
         const faculty = [
           ...new Set(c.sections.flatMap((s) => s.faculty)),
         ];
-        return { course: c, prefs, placements, faculty };
+        return { course: c, prefs, placements, allowedCount, faculty };
       }),
-    [enrolledCourses, coursePrefs]
+    [enrolledCourses, coursePrefs, constraints]
   );
 
-  const totalPlacements = perCourse.reduce((s, x) => s * Math.max(1, x.placements.length), 1);
+  const fullyBlocked = perCourse.filter((x) => x.allowedCount === 0);
+  const totalPlacements = perCourse.reduce((s, x) => s * Math.max(1, x.allowedCount), 1);
 
   return (
     <div className="space-y-5">
+      <ConstraintsCard constraints={constraints} onChange={onChangeConstraints} />
+
+      {fullyBlocked.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          ⚠ With the current no-class rules, {fullyBlocked.map((x) => x.course.courseCode).join(", ")}{" "}
+          {fullyBlocked.length === 1 ? "has" : "have"} no sections left. Relax a rule or drop{" "}
+          {fullyBlocked.length === 1 ? "it" : "them"} before solving.
+        </div>
+      )}
       <Card className="p-5">
         <SectionTitle hint="the heuristic suggestion is pre-selected — override anything you know is wrong">
           How do this term's sections work for each subject?
         </SectionTitle>
         <div className="space-y-4">
-          {perCourse.map(({ course, prefs, placements, faculty }) => {
+          {perCourse.map(({ course, prefs, placements, allowedCount, faculty }) => {
             const comboBroken =
               prefs.sectionMode === "mandatory-combo" && placements.length === 0;
             const realHours = placements[0]?.busy.length ?? 0;
@@ -129,6 +146,9 @@ export default function SectionsStep({
                           : fmtCells(s.weeklyCells)}
                       </span>
                       {s.selfPaced && <Badge tone="purple">self-paced</Badge>}
+                      {!s.selfPaced && !cellsAllowed(realCells([s]), constraints) && (
+                        <Badge tone="red">excluded by no-class rules</Badge>
+                      )}
                       <span className="ml-auto text-slate-400">
                         {s.startDate} → {s.endDate}
                       </span>
@@ -159,7 +179,9 @@ export default function SectionsStep({
                   </label>
                   <span className="text-xs text-slate-400">
                     {prefs.sectionMode === "alternative"
-                      ? `${placements.length} candidate section${placements.length === 1 ? "" : "s"}`
+                      ? `${allowedCount} candidate section${allowedCount === 1 ? "" : "s"}${
+                          allowedCount !== placements.length ? ` (${placements.length - allowedCount} excluded by rules)` : ""
+                        }`
                       : comboBroken
                         ? "combo impossible"
                         : `1 fixed package · ${realHours} contact hrs/wk`}

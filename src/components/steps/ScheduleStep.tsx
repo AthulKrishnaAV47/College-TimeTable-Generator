@@ -1,11 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Course, RankPreference, ScheduleSolution, SolverFailure, StudentProfile } from "@/lib/types";
+import type {
+  Course,
+  NearMissSchedule,
+  RankPreference,
+  ScheduleConstraints,
+  ScheduleSolution,
+  SolveOutcome,
+  SolverFailure,
+  StudentProfile,
+} from "@/lib/types";
 import type { GridBlock } from "@/lib/grid";
 import { computeGridBlocks, gridRange, PALETTE } from "@/lib/grid";
 import { buildTimetableSvg } from "@/lib/svg";
 import { buildIcs } from "@/lib/ics";
+import { solutionRuleViolations } from "@/lib/solver";
 import { downloadBlob, downloadText, slugify, svgToPngBlob } from "@/lib/download";
 import TimetableGrid from "@/components/TimetableGrid";
 import { Badge, Btn, Card, SectionTitle, Stat } from "@/components/ui";
@@ -26,6 +36,9 @@ interface Props {
   solutionIdx: number;
   onSolutionIdx: (i: number) => void;
   failure: SolverFailure | null;
+  solveOutcome: SolveOutcome | null;
+  nearMiss: NearMissSchedule | null;
+  constraints: ScheduleConstraints;
   onSaveDraft: (solution: ScheduleSolution, label: string) => void;
   onBack: () => void;
   onReenroll: () => void;
@@ -48,6 +61,9 @@ export default function ScheduleStep({
   solutionIdx,
   onSolutionIdx,
   failure,
+  solveOutcome,
+  nearMiss,
+  constraints,
   onSaveDraft,
   onBack,
   onReenroll,
@@ -65,6 +81,9 @@ export default function ScheduleStep({
     [enrolledCourses]
   );
 
+  const constraintsActive =
+    (constraints?.excludedDays?.length ?? 0) > 0 || (constraints?.excludedRanges?.length ?? 0) > 0;
+
   const blocks: GridBlock[] = useMemo(() => {
     if (!active) return [];
     const names: Record<string, string> = {};
@@ -73,6 +92,15 @@ export default function ScheduleStep({
     }
     return computeGridBlocks(active.placements, names);
   }, [active, courseByCode]);
+
+  const nearMissBlocks: GridBlock[] = useMemo(() => {
+    if (!nearMiss) return [];
+    const names: Record<string, string> = {};
+    for (const [code] of Object.entries(nearMiss.placements)) {
+      names[code] = courseByCode.get(code)?.courseName ?? code;
+    }
+    return computeGridBlocks(nearMiss.placements, names);
+  }, [nearMiss, courseByCode]);
 
   const courseRows = useMemo(() => {
     if (!active) return [];
@@ -161,6 +189,15 @@ export default function ScheduleStep({
   if (!solutions || failure) {
     return (
       <div className="space-y-5">
+        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3">
+          <p className="text-sm font-semibold text-red-800">
+            Not possible with this selection — no conflict-free timetable exists.
+          </p>
+          <p className="mt-0.5 text-xs text-red-700">
+            Even ignoring your no-class rules, every complete schedule overlaps somewhere. The best
+            (fewest-clash) attempt is rendered below so you can see exactly what&apos;s in the way.
+          </p>
+        </div>
         <Card className="border-red-200 p-5">
           <div className="mb-2 flex items-center gap-2">
             <Badge tone="red">No valid timetable</Badge>
@@ -195,6 +232,62 @@ export default function ScheduleStep({
               </p>
             </div>
           )}
+          {failure && failure.nearMisses.length > 0 && (
+            <div className="mt-4">
+              <SectionTitle hint="complete schedules with the fewest overlapping hours">
+                Closest schedules — each still has a clash
+              </SectionTitle>
+              <ul className="space-y-2">
+                {failure.nearMisses.map((nm, i) => (
+                  <li key={i} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="amber">{nm.conflictHours} clashing hour{nm.conflictHours === 1 ? "" : "s"}</Badge>
+                      <span className="font-mono text-xs text-slate-700">
+                        {Object.entries(nm.assignment)
+                          .map(([code, id]) => `${code} ${id.split("::")[1] ?? ""}`)
+                          .join(" · ")}
+                      </span>
+                    </div>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
+                      {nm.clashes.map((c, j) => (
+                        <li key={j}>
+                          <span className="font-mono">{c.courseA} {c.sectionA}</span> ×{" "}
+                          <span className="font-mono">{c.courseB} {c.sectionB}</span>: {c.windows.join(", ")}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-slate-500">
+                If a clash above involves times that don’t match your real slot sheet, the PDF
+                extraction likely merged neighbouring columns into that section (check its weekly
+                hours in the parse preview) — re-upload the file; the extractor now rebuilds each
+                column separately.
+              </p>
+            </div>
+          )}
+          {nearMiss && nearMissBlocks.length > 0 && (
+            <div className="mt-6">
+              <SectionTitle hint="complete schedule with the fewest possible clashes — not conflict-free">
+                Best possible schedule ({nearMiss.conflictHours} clashing hour
+                {nearMiss.conflictHours === 1 ? "" : "s"})
+              </SectionTitle>
+              <TimetableGrid blocks={nearMissBlocks} />
+              <div className="mt-2 space-y-1">
+                {nearMiss.clashes.map((c, j) => (
+                  <p key={j} className="text-xs font-medium text-red-600">
+                    ⚠ <span className="font-mono">{c.courseA} {c.sectionA}</span> overlaps{" "}
+                    <span className="font-mono">{c.courseB} {c.sectionB}</span> — {c.windows.join(", ")}
+                  </p>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                To get a real timetable: drop or swap one of the clashing subjects (or switch a
+                course to “alternatives” if it has other sections).
+              </p>
+            </div>
+          )}
         </Card>
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
           <Btn variant="secondary" onClick={onBack}>
@@ -209,31 +302,66 @@ export default function ScheduleStep({
   const m = active!.metrics;
 
   /* ----------------------------- success UI ----------------------------- */
+  const bestViol = constraintsActive ? solutionRuleViolations(solutions![0].placements, constraints) : 0;
+  const relaxed = solveOutcome === "relaxed";
+
   return (
     <div className="space-y-5">
+      {/* No-class rule outcome banner */}
+      {relaxed && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">
+            Your no-class rules can’t all be met — here’s the closest match.
+          </p>
+          <p className="mt-0.5 text-xs text-amber-800">
+            Every option below is still 100% conflict-free. Option #1 breaks the fewest rule hours
+            ({bestViol}), e.g. a class on an excluded day or inside an excluded window. Loosen the
+            rules on the previous step for a fully rule-respecting schedule.
+          </p>
+        </div>
+      )}
+      {solveOutcome === "strict" && constraintsActive && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3">
+          <p className="text-sm font-semibold text-emerald-800">
+            ✓ All {solutions!.length} option{solutions!.length === 1 ? "" : "s"} respect your
+            no-class rules.
+          </p>
+        </div>
+      )}
+
       {/* Solution switcher + ranking */}
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              {solutions.length} valid timetable{solutions.length === 1 ? "" : "s"} found
+              {relaxed
+                ? `${solutions.length} conflict-free option${solutions.length === 1 ? "" : "s"} — closest to your rules`
+                : `${solutions.length} valid timetable${solutions.length === 1 ? "" : "s"} found`}
             </span>
-            {solutions.map((s, i) => (
-              <button
-                key={i}
-                onClick={() => onSolutionIdx(i)}
-                className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                  i === Math.min(solutionIdx, solutions.length - 1)
-                    ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                }`}
-                title={`${s.metrics.totalGaps}h gaps · ${s.metrics.freeDays} free days`}
-              >
-                #{i + 1}
-                {i === 0 ? " ★" : ""}
-                <span className="ml-1 opacity-70">{s.metrics.totalGaps}h gaps</span>
-              </button>
-            ))}
+            {solutions.map((s, i) => {
+              const v = constraintsActive
+                ? solutionRuleViolations(s.placements, constraints)
+                : 0;
+              return (
+                <button
+                  key={i}
+                  onClick={() => onSolutionIdx(i)}
+                  className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    i === Math.min(solutionIdx, solutions.length - 1)
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                  }`}
+                  title={`${s.metrics.totalGaps}h gaps · ${s.metrics.freeDays} free days${
+                    v > 0 ? ` · breaks ${v} no-class rule hour(s)` : ""
+                  }`}
+                >
+                  #{i + 1}
+                  {i === 0 ? " ★" : ""}
+                  <span className="ml-1 opacity-70">{s.metrics.totalGaps}h gaps</span>
+                  {v > 0 && <span className="ml-1 font-semibold text-amber-500">⚠{v}</span>}
+                </button>
+              );
+            })}
             {truncated && (
               <span className="text-[11px] text-amber-600">
                 search stopped early (budget) — these are the best found so far

@@ -36,12 +36,12 @@ export function cellKey(cell: TimeCell): string {
 }
 
 export function cellsOverlap(a: TimeCell, b: TimeCell): boolean {
-  if (a.day !== b.day) return false;
-  const aS = timeToMinutes(a.startTime);
-  const aE = timeToMinutes(a.endTime);
-  const bS = timeToMinutes(b.startTime);
-  const bE = timeToMinutes(b.endTime);
-  return aS < bE && bS < aE;
+  return rangesOverlap(a.startTime, a.endTime, b.startTime, b.endTime) && a.day === b.day;
+}
+
+/** Pure interval overlap (ignores the day). */
+export function rangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return timeToMinutes(aStart) < timeToMinutes(bEnd) && timeToMinutes(bStart) < timeToMinutes(aEnd);
 }
 
 /** Merge contiguous/adjacent cells (same day) into blocks for display. */
