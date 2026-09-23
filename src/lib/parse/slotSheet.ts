@@ -43,8 +43,8 @@ const DAY_LINE_RE = /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)
 const TIME_RANGE_RE = /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/g;
 
 // Section line: "<Batch>, <SlotCode>, <Dept> - <Faculty...>"
-// SlotCode is the 2nd comma part, e.g. "T1-P3" / "T1-L3" / "T1-V5" (or "P3").
-const SLOT_CODE_RE = /^[A-Za-z]{1,3}\d+(\s*-\s*[A-Za-z]{0,3}\d+)?$/;
+// SlotCode is the 2nd comma part, e.g. "T1-P3" / "T1-L3" / "T1-BLENDED"
+const SLOT_CODE_RE = /^[A-Za-z]{1,3}\d+(?:-BLENDED(?:-\d+)?)?(?:\s*-\s*[A-Za-z]{0,3}\d+)?$/i;
 
 export function parseSectionLine(line: string): {
   batch: string;

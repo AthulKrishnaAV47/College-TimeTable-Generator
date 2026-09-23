@@ -38,8 +38,11 @@ export default function LoginPage({ onLogin }: { onLogin: (user: SessionUser) =>
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-center gap-10 px-4 py-12 lg:flex-row lg:justify-between">
       {/* Brand / value panel */}
       <section className="max-w-md text-center lg:text-left">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white/70 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm">
-          <span className="h-2 w-2 rounded-full bg-blue-600" />
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-200/50 bg-white/40 px-4 py-1.5 text-xs font-semibold text-blue-700 shadow-sm backdrop-blur-md">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600"></span>
+          </span>
           MyCamu slot-sheet planner
         </div>
         <h1 className="title-gradient text-4xl font-extrabold tracking-tight sm:text-5xl">
@@ -70,7 +73,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: SessionUser) =>
       <section className="w-full max-w-md">
         <form
           onSubmit={submit}
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/40 sm:p-8"
+          className="rounded-3xl border border-white/50 bg-white/60 p-6 shadow-2xl shadow-blue-900/10 backdrop-blur-xl sm:p-8"
         >
           <h2 className="text-xl font-bold text-slate-900">Sign in</h2>
           <p className="mt-1 text-xs text-slate-500">
@@ -130,7 +133,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: SessionUser) =>
 
           <button
             type="submit"
-            className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-blue-700"
+            className="mt-6 w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:-translate-y-0.5 hover:shadow-blue-500/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             Sign in
           </button>

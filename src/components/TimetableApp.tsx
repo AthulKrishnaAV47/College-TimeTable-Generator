@@ -40,6 +40,8 @@ import SectionsStep from "@/components/steps/SectionsStep";
 import ScheduleStep from "@/components/steps/ScheduleStep";
 import DraftsStep from "@/components/steps/DraftsStep";
 
+import { CalendarDays, LogOut, RefreshCcw, CheckCircle2, ChevronRight } from "lucide-react";
+
 export default function TimetableApp({
   user,
   onLogout,
@@ -307,8 +309,9 @@ export default function TimetableApp({
 
   if (!hydrated) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-16 text-center text-base text-slate-400">
-        Loading your session…
+      <main className="mx-auto flex max-w-5xl items-center justify-center px-4 py-32 text-center text-lg text-slate-500 animate-pulse font-medium">
+        <RefreshCcw className="mr-3 h-6 w-6 animate-spin text-blue-500" />
+        Loading your session...
       </main>
     );
   }
@@ -317,165 +320,191 @@ export default function TimetableApp({
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       {/* Header */}
       <header className="mb-7">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-sm backdrop-blur">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-base font-bold text-white shadow-md">
-              {(user?.name ?? "S").slice(0, 1).toUpperCase()}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[2rem] border border-white/60 bg-white/70 px-6 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 text-xl font-bold text-white shadow-lg shadow-blue-500/25 ring-4 ring-white/50">
+              <CalendarDays className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight text-slate-800">
+              <p className="text-base font-bold tracking-tight text-slate-800">
                 {user ? user.name : "Student"}
               </p>
-              <p className="text-xs leading-tight text-slate-400">{user?.email ?? "local session"}</p>
+              <p className="text-sm font-medium text-slate-500">{user?.email ?? "local session"}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
-              className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
+              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition-all hover:bg-red-50 hover:text-red-600"
               onClick={() => {
                 if (window.confirm("Reset the current session (drafts are kept)?")) {
                   setState({ ...DEFAULT_STATE });
                 }
               }}
             >
+              <RefreshCcw className="h-4 w-4" />
               Reset session
             </button>
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-900"
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:scale-105 hover:border-indigo-200 hover:text-indigo-700 hover:shadow-md"
               >
+                <LogOut className="h-4 w-4" />
                 Sign out
               </button>
             )}
           </div>
         </div>
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
-            <h1 className="title-gradient text-3xl font-extrabold tracking-tight">
+            <h1 className="bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-500 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent">
               Term Timetable Generator
             </h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Turn a MyCamu term slot sheet into a valid, conflict-free weekly timetable: 100% of
-              weekly contact hours for every enrolled section, zero day+time collisions.
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-500">
+              Turn your MyCamu term slot sheet into a perfect, conflict-free weekly timetable. Ensure 100% of your contact hours are met with zero day or time collisions.
             </p>
           </div>
         </div>
       </header>
 
       {/* Stepper */}
-      <nav className="mb-6 flex flex-wrap gap-1.5">
+      <nav className="mb-10 flex flex-wrap justify-center gap-2 rounded-2xl bg-white/50 p-2.5 shadow-sm ring-1 ring-slate-900/5 backdrop-blur-xl sm:justify-start">
         {STEPS.map((label, i) => {
           const activeStep = step === i;
           const reachable = canGo(i);
+          const completed = reachable && i < step;
           return (
             <button
               key={label}
               disabled={!reachable}
               onClick={() => reachable && patch({ step: i })}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-medium transition-colors ${
+              className={`group flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-bold transition-all duration-300 ${
                 activeStep
-                  ? "bg-slate-900 text-white"
+                  ? "bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-md shadow-blue-500/20 scale-[1.02]"
                   : reachable
-                    ? "bg-white text-slate-600 hover:bg-slate-200 border border-slate-200"
-                    : "bg-slate-100 text-slate-300 border border-slate-100 cursor-not-allowed"
+                    ? "bg-transparent text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm"
+                    : "bg-transparent text-slate-400 opacity-50 cursor-not-allowed"
               }`}
             >
               <span
-                className={`flex h-4.5 w-4.5 items-center justify-center rounded-full text-[10px] ${
-                  activeStep ? "bg-white/20" : "bg-slate-100"
+                className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition-colors ${
+                  activeStep
+                    ? "bg-white/20 text-white"
+                    : completed
+                      ? "bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200"
+                      : "bg-slate-100 text-slate-500 group-hover:bg-slate-200"
                 }`}
-                style={{ height: 18, width: 18 }}
               >
-                {i + 1}
+                {completed ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
               </span>
               {label}
+              {i < STEPS.length - 1 && (
+                <ChevronRight className={`ml-1 h-4 w-4 opacity-40 ${activeStep ? 'text-white' : 'text-slate-400'}`} />
+              )}
             </button>
           );
         })}
       </nav>
 
       {/* Steps */}
-      {step === 0 && (
-        <DataStep
-          slotSheet={state.slotSheet}
-          eligibility={state.eligibility}
-          onSlotSheet={(p: ParsedSlotSheet) =>
-            patch({ slotSheet: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
-          }
-          onEligibility={(p: ParsedEligibility) =>
-            patch({ eligibility: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
-          }
-          onNext={() => patch({ step: 1 })}
-        />
-      )}
+      <div className="rounded-3xl bg-white/60 p-6 shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-xl sm:p-8">
+        {step === 0 && (
+          <DataStep
+            slotSheet={state.slotSheet}
+            eligibility={state.eligibility}
+            onSlotSheet={(p: ParsedSlotSheet) =>
+              patch({ slotSheet: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
+            }
+            onEligibility={(p: ParsedEligibility) =>
+              patch({ eligibility: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
+            }
+            onNext={() => patch({ step: 1 })}
+          />
+        )}
 
-      {step === 1 && state.slotSheet && (
-        <ProfileStep
-          profile={state.profile}
-          courses={state.slotSheet.courses}
-          onChange={handleProfile}
-          onNext={() => patch({ step: 2 })}
-          onBack={() => patch({ step: 0 })}
-        />
-      )}
+        {step === 1 && state.slotSheet && (
+          <ProfileStep
+            profile={state.profile}
+            courses={state.slotSheet.courses}
+            onChange={handleProfile}
+            onNext={() => patch({ step: 2 })}
+            onBack={() => patch({ step: 0 })}
+          />
+        )}
 
-      {step === 2 && summary && (
-        <SubjectsStep
-          state={state}
-          summary={summary}
-          enrolledCodes={enrolledCodes}
-          onMode={handleMode}
-          onTogglePick={handleTogglePick}
-          onAutoSettings={handleAutoSettings}
-          onAutoResult={handleAutoResult}
-          onNext={() => patch({ step: 3 })}
-          onBack={() => patch({ step: 1 })}
-        />
-      )}
+        {step === 2 && summary && (
+          <SubjectsStep
+            state={state}
+            summary={summary}
+            enrolledCodes={enrolledCodes}
+            onMode={handleMode}
+            onTogglePick={handleTogglePick}
+            onAutoSettings={handleAutoSettings}
+            onAutoResult={handleAutoResult}
+            onNext={() => patch({ step: 3 })}
+            onBack={() => patch({ step: 1 })}
+          />
+        )}
 
-      {step === 3 && (
-        <SectionsStep
-          enrolledCourses={enrolledCourses}
-          coursePrefs={state.coursePrefs}
-          constraints={state.constraints}
-          onChangePrefs={handleChangePrefs}
-          onChangeConstraints={handleChangeConstraints}
-          onSolve={() => runSolve()}
-          onBack={() => patch({ step: 2 })}
-        />
-      )}
+        {step === 3 && (
+          <SectionsStep
+            enrolledCourses={enrolledCourses}
+            coursePrefs={state.coursePrefs}
+            constraints={state.constraints}
+            onChangePrefs={handleChangePrefs}
+            onChangeConstraints={handleChangeConstraints}
+            onSolve={() => runSolve()}
+            onBack={() => patch({ step: 2 })}
+          />
+        )}
 
-      {step === 4 && (
-        <ScheduleStep
-          profile={state.profile}
-          enrolledCourses={enrolledCourses}
-          rankBy={state.rankBy}
-          onRankBy={handleRankBy}
-          solutions={state.solutions}
-          truncated={state.truncatedSearch}
-          solutionIdx={state.solutionIdx}
-          onSolutionIdx={(i) => patch({ solutionIdx: i })}
-          failure={state.failure}
-          solveOutcome={state.solveOutcome}
-          nearMiss={state.nearMiss}
-          constraints={state.constraints}
-          onSaveDraft={saveDraft}
-          onBack={() => patch({ step: 3 })}
-          onReenroll={() => patch({ step: 2 })}
-        />
-      )}
+        {step === 4 && (
+          <ScheduleStep
+            profile={state.profile}
+            enrolledCourses={enrolledCourses}
+            rankBy={state.rankBy}
+            onRankBy={handleRankBy}
+            solutions={state.solutions}
+            truncated={state.truncatedSearch}
+            solutionIdx={state.solutionIdx}
+            onSolutionIdx={(i) => patch({ solutionIdx: i })}
+            failure={state.failure}
+            solveOutcome={state.solveOutcome}
+            nearMiss={state.nearMiss}
+            constraints={state.constraints}
+            onSaveDraft={saveDraft}
+            onBack={() => patch({ step: 3 })}
+            onReenroll={() => patch({ step: 2 })}
+          />
+        )}
 
-      {step === 5 && (
-        <DraftsStep drafts={drafts} onUpdate={updateDrafts} onRestore={restoreDraft} />
-      )}
+        {step === 5 && (
+          <DraftsStep drafts={drafts} onUpdate={updateDrafts} onRestore={restoreDraft} />
+        )}
+      </div>
 
-      <footer className="mt-10 border-t border-slate-200 pt-4 text-[11px] leading-relaxed text-slate-400">
-        Eligibility = (courses offered this term, File A) ∩ (SBC/FC + year rows, File B — Year II
-        &amp; III also includes Year I subjects) − completed courses. Conflict checks run at 1-hour
-        granularity across every enrolled section; 1-minute administrative placeholders are treated
-        as self-paced and never block a schedule, and your no-class day/time rules are hard solver
-        constraints. Session data and drafts live only in your browser’s localStorage.
+      <footer className="mt-16 flex flex-col items-center gap-4 text-center">
+        <p className="max-w-3xl text-sm leading-relaxed text-slate-500">
+          Eligibility = (courses offered this term, File A) ∩ (SBC/FC + year rows, File B — Year II
+          &amp; III also includes Year I subjects) − completed courses. Conflict checks run at 1-hour
+          granularity across every enrolled section; 1-minute administrative placeholders are treated
+          as self-paced and never block a schedule, and your no-class day/time rules are hard solver
+          constraints. Session data and drafts live only in your browser’s localStorage.
+        </p>
+        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition-all hover:scale-105 hover:border-slate-300 hover:shadow">
+          <span>Created by Athul Krishna A V</span>
+          <a
+            href="https://github.com/AthulKrishnaAV47"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700"
+          >
+            <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+            </svg>
+            GitHub
+          </a>
+        </div>
       </footer>
     </main>
   );

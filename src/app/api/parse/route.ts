@@ -41,13 +41,19 @@ export async function POST(req: NextRequest) {
       if (isPdf) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const pdf = await getDocumentProxy(bytes);
-        rawText = await extractLayoutAware(pdf);
-        extraction = "layout-aware";
-        if (!rawText.trim()) {
-          // Fallback: naive extraction (no coordinates available)
+        if (kind === "eligibility") {
           const { text } = await extractText(pdf, { mergePages: true });
           rawText = text;
           extraction = "plain";
+        } else {
+          rawText = await extractLayoutAware(pdf);
+          extraction = "layout-aware";
+          if (!rawText.trim()) {
+            // Fallback: naive extraction (no coordinates available)
+            const { text } = await extractText(pdf, { mergePages: true });
+            rawText = text;
+            extraction = "plain";
+          }
         }
       } else {
         rawText = await file.text();
