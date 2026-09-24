@@ -48,7 +48,7 @@ export default function DraftsStep({ drafts, onUpdate, onRestore }: Props) {
           Saved drafts ({drafts.length})
         </SectionTitle>
         {drafts.length === 0 ? (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-500">
             No drafts yet — generate a timetable and hit “Save as draft”. The solver often finds
             several valid options; saving a few lets you compare them here.
           </p>
@@ -71,7 +71,7 @@ export default function DraftsStep({ drafts, onUpdate, onRestore }: Props) {
                     <span className="text-sm font-semibold text-slate-800">{d.label}</span>
                     <Badge tone="blue">{d.profile.termLabel}</Badge>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-slate-400">
+                  <div className="mt-0.5 text-[11px] text-slate-500">
                     {d.courseChoices.length} subjects · {d.metrics.weeklyContactHours} contact
                     hrs/wk · {d.metrics.freeDays} free days · {d.metrics.totalGaps}h gaps · saved{" "}
                     {new Date(d.createdAt).toLocaleString()}
@@ -115,7 +115,7 @@ export default function DraftsStep({ drafts, onUpdate, onRestore }: Props) {
         </Card>
       )}
       {comparing.length === 1 && (
-        <p className="text-xs text-slate-400">Tick at least two drafts to compare.</p>
+        <p className="text-xs text-slate-500">Tick at least two drafts to compare.</p>
       )}
     </div>
   );
@@ -140,7 +140,7 @@ function ComparisonCard({ draft }: { draft: DraftSnapshot }) {
     <div className="min-w-[560px] flex-1">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold text-slate-700">{draft.label}</span>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] text-slate-500">
           {realCourses.length} subjects · {credits} cr · {draft.metrics.freeDays} free days ·{" "}
           {draft.metrics.totalGaps}h gaps
         </span>

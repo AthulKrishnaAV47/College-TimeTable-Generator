@@ -4,42 +4,57 @@
   color-scheme: light;
 }
 
-/* Zoomed-in baseline: everything rem-based (Tailwind spacing + text) scales up */
 html {
-  font-size: 22px; /* Increased to fix the zoomed out feeling */
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #334155;
+  background-color: #f8fafc;
 }
 
 body {
   min-height: 100vh;
-  background: 
-    radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(147, 51, 234, 0.15), transparent 25%),
-    linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
-  background-attachment: fixed;
+  background-color: #f8fafc;
 }
 
 ::selection {
   background: #bfdbfe;
 }
 
-.title-gradient {
-  background: linear-gradient(90deg, #1d4ed8, #6d28d9);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.glass {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
-/* Slim scrollbars for the side-by-side draft comparison */
-.thin-scroll::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
+.glass-btn {
+  background-color: #2563eb;
+  color: #ffffff;
+  border: 1px solid #1d4ed8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 }
-.thin-scroll::-webkit-scrollbar-thumb {
+.glass-btn:hover {
+  background-color: #1d4ed8;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.title-gradient {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+/* Slim scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 8px;
+  border-radius: 4px;
 }
-.thin-scroll::-webkit-scrollbar-track {
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+::-webkit-scrollbar-track {
   background: transparent;
 }

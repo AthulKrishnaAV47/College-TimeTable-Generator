@@ -59,7 +59,7 @@ function CourseRow({
           <span className="truncate text-sm text-slate-600">{course.courseName}</span>
         </div>
         {subtitle ?? (
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
             <span>{course.credits} credits</span>
             <span>· {sections.length} section{sections.length === 1 ? "" : "s"}</span>
             <span>· {realHours} contact hrs/wk</span>
@@ -88,6 +88,7 @@ export default function SubjectsStep({
 }: Props) {
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoResult, setAutoResult] = useState<AutoSelectResult | null>(null);
+  const [search, setSearch] = useState("");
 
   const all = useMemo(() => [...summary.sbc, ...summary.fc], [summary]);
 
@@ -139,7 +140,7 @@ export default function SubjectsStep({
           <div className="rounded-xl bg-slate-50 px-3 py-2">
             <div className="text-[11px] font-medium text-slate-500 uppercase">Picked</div>
             <div className="text-lg font-semibold text-slate-800">
-              {enrolledCodes.size} <span className="text-sm text-slate-400">({creditsPicked} cr)</span>
+              {enrolledCodes.size} <span className="text-sm text-slate-500">({creditsPicked} cr)</span>
             </div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
@@ -203,15 +204,25 @@ export default function SubjectsStep({
           <SectionTitle hint="tick what you're enrolling in this term">
             Subject checklist
           </SectionTitle>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search subjects by code or name..."
+            className="mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+          />
           <div className="space-y-5">
             {(["SBC", "FC"] as const).map((group) => {
-              const list = group === "SBC" ? summary.sbc : summary.fc;
+              const fullList = group === "SBC" ? summary.sbc : summary.fc;
+              const list = fullList.filter(c => 
+                (c.courseCode || "").toLowerCase().includes(search.toLowerCase()) || 
+                (c.courseName || "").toLowerCase().includes(search.toLowerCase())
+              );
               return (
                 <div key={group}>
                   <div className="mb-2 flex items-center gap-2">
                     <Badge tone={group === "SBC" ? "blue" : "green"}>{group}</Badge>
-                    <span className="text-xs text-slate-400">
-                      {list.length} available · {group === "SBC" ? sbcPicked : fcPicked} selected
+                    <span className="text-xs text-slate-500">
+                      {fullList.length} available · {group === "SBC" ? sbcPicked : fcPicked} selected
                       (target ≥ {group === "SBC" ? state.autoSettings.minSBC : state.autoSettings.minFC})
                     </span>
                   </div>
@@ -225,7 +236,7 @@ export default function SubjectsStep({
                       />
                     ))}
                     {list.length === 0 && (
-                      <p className="text-xs text-slate-400">No eligible {group} this term.</p>
+                      <p className="text-xs text-slate-500">No eligible {group} this term.</p>
                     )}
                   </div>
                 </div>
@@ -244,13 +255,13 @@ export default function SubjectsStep({
                 <label className="w-40 text-sm text-slate-600">Target mode</label>
                 <div className="flex overflow-hidden rounded-lg border border-slate-300">
                   <button
-                    className={`px-3 py-1.5 text-xs font-medium ${!state.autoSettings.useCredits ? "bg-blue-600 text-white" : "bg-white text-slate-600"}`}
+                    className={`px-3 py-1.5 text-xs font-medium ${!state.autoSettings.useCredits ? "bg-blue-600 text-slate-800" : "bg-white text-slate-600"}`}
                     onClick={() => onAutoSettings({ ...state.autoSettings, useCredits: false })}
                   >
                     # of subjects
                   </button>
                   <button
-                    className={`px-3 py-1.5 text-xs font-medium ${state.autoSettings.useCredits ? "bg-blue-600 text-white" : "bg-white text-slate-600"}`}
+                    className={`px-3 py-1.5 text-xs font-medium ${state.autoSettings.useCredits ? "bg-blue-600 text-slate-800" : "bg-white text-slate-600"}`}
                     onClick={() => onAutoSettings({ ...state.autoSettings, useCredits: true })}
                   >
                     credit total
@@ -273,7 +284,7 @@ export default function SubjectsStep({
                         : { ...state.autoSettings, targetCount: Math.max(1, +e.target.value || 0) }
                     )
                   }
-                  className="w-24 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-24 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
                 />
               </div>
             </div>
@@ -286,7 +297,7 @@ export default function SubjectsStep({
                   max={8}
                   value={state.autoSettings.minSBC}
                   onChange={(e) => onAutoSettings({ ...state.autoSettings, minSBC: Math.max(0, +e.target.value || 0) })}
-                  className="w-24 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-24 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
                 />
               </div>
               <div className="flex items-center gap-3">
@@ -297,7 +308,7 @@ export default function SubjectsStep({
                   max={8}
                   value={state.autoSettings.minFC}
                   onChange={(e) => onAutoSettings({ ...state.autoSettings, minFC: Math.max(0, +e.target.value || 0) })}
-                  className="w-24 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-24 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
                 />
               </div>
             </div>
@@ -332,7 +343,7 @@ export default function SubjectsStep({
                     checked={enrolledCodes.has(c.courseCode)}
                     onToggle={() => onTogglePick(c.courseCode)}
                     subtitle={
-                      <div className="mt-0.5 text-[11px] text-slate-400">
+                      <div className="mt-0.5 text-[11px] text-slate-500">
                         {c.credits} credits · auto-selected (tick to remove)
                       </div>
                     }
@@ -373,7 +384,7 @@ export default function SubjectsStep({
         </Btn>
       </div>
       {enrolledCodes.size > 0 && (
-        <p className="-mt-3 text-right text-[11px] text-slate-400">
+        <p className="-mt-3 text-right text-[11px] text-slate-500">
           Next: confirm which section lists are alternatives vs mandatory combos.
         </p>
       )}

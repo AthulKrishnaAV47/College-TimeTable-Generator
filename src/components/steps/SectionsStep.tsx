@@ -101,7 +101,7 @@ export default function SectionsStep({
                     <button
                       className={`px-3 py-1.5 ${
                         prefs.sectionMode === "alternative"
-                          ? "bg-blue-600 text-white"
+                          ? "bg-blue-600 text-slate-800"
                           : "bg-white text-slate-600 hover:bg-slate-50"
                       }`}
                       onClick={() =>
@@ -113,7 +113,7 @@ export default function SectionsStep({
                     <button
                       className={`px-3 py-1.5 ${
                         prefs.sectionMode === "mandatory-combo"
-                          ? "bg-purple-600 text-white"
+                          ? "bg-purple-600 text-slate-800"
                           : "bg-white text-slate-600 hover:bg-slate-50"
                       }`}
                       onClick={() =>
@@ -140,7 +140,7 @@ export default function SectionsStep({
                     >
                       <span className="font-mono font-semibold text-slate-700">{s.slotCode}</span>
                       <span>{s.faculty.join(", ") || "faculty TBD"}</span>
-                      <span className="text-slate-400">
+                      <span className="text-slate-500">
                         {s.weeklyCells.length === 0
                           ? "no fixed time"
                           : fmtCells(s.weeklyCells)}
@@ -149,7 +149,7 @@ export default function SectionsStep({
                       {!s.selfPaced && !cellsAllowed(realCells([s]), constraints) && (
                         <Badge tone="red">excluded by no-class rules</Badge>
                       )}
-                      <span className="ml-auto text-slate-400">
+                      <span className="ml-auto text-slate-500">
                         {s.startDate} → {s.endDate}
                       </span>
                     </div>
@@ -167,7 +167,7 @@ export default function SectionsStep({
                           preferredFaculty: e.target.value || null,
                         })
                       }
-                      className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+                      className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
                     >
                       <option value="">No preference</option>
                       {faculty.map((f) => (
@@ -177,7 +177,7 @@ export default function SectionsStep({
                       ))}
                     </select>
                   </label>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-500">
                     {prefs.sectionMode === "alternative"
                       ? `${allowedCount} candidate section${allowedCount === 1 ? "" : "s"}${
                           allowedCount !== placements.length ? ` (${placements.length - allowedCount} excluded by rules)` : ""
@@ -204,7 +204,7 @@ export default function SectionsStep({
           ← Back
         </Btn>
         <div className="flex items-center gap-3">
-          <span className="hidden text-[11px] text-slate-400 sm:inline">
+          <span className="hidden text-[11px] text-slate-500 sm:inline">
             search space ≈ {totalPlacements.toLocaleString()} combinations
           </span>
           <Btn onClick={onSolve}>Find conflict-free timetables →</Btn>

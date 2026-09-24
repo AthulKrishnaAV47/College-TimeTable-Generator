@@ -322,7 +322,7 @@ export default function TimetableApp({
       <header className="mb-7">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[2rem] border border-white/60 bg-white/70 px-6 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 text-xl font-bold text-white shadow-lg shadow-blue-500/25 ring-4 ring-white/50">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 text-xl font-bold text-slate-800 shadow-lg shadow-blue-500/25 ring-4 ring-white/50">
               <CalendarDays className="h-6 w-6" />
             </div>
             <div>
@@ -380,16 +380,16 @@ export default function TimetableApp({
               onClick={() => reachable && patch({ step: i })}
               className={`group flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-bold transition-all duration-300 ${
                 activeStep
-                  ? "bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-md shadow-blue-500/20 scale-[1.02]"
+                  ? "bg-gradient-to-r from-indigo-500 to-blue-600 text-slate-800 shadow-md shadow-blue-500/20 scale-[1.02]"
                   : reachable
                     ? "bg-transparent text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm"
-                    : "bg-transparent text-slate-400 opacity-50 cursor-not-allowed"
+                    : "bg-transparent text-slate-500 opacity-50 cursor-not-allowed"
               }`}
             >
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition-colors ${
                   activeStep
-                    ? "bg-white/20 text-white"
+                    ? "bg-white/20 text-slate-800"
                     : completed
                       ? "bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200"
                       : "bg-slate-100 text-slate-500 group-hover:bg-slate-200"
@@ -399,7 +399,7 @@ export default function TimetableApp({
               </span>
               {label}
               {i < STEPS.length - 1 && (
-                <ChevronRight className={`ml-1 h-4 w-4 opacity-40 ${activeStep ? 'text-white' : 'text-slate-400'}`} />
+                <ChevronRight className={`ml-1 h-4 w-4 opacity-40 ${activeStep ? 'text-slate-800' : 'text-slate-500'}`} />
               )}
             </button>
           );

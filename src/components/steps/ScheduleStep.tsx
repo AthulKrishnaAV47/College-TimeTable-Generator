@@ -239,7 +239,7 @@ export default function ScheduleStep({
               </SectionTitle>
               <ul className="space-y-2">
                 {failure.nearMisses.map((nm, i) => (
-                  <li key={i} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm">
+                  <li key={i} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone="amber">{nm.conflictHours} clashing hour{nm.conflictHours === 1 ? "" : "s"}</Badge>
                       <span className="font-mono text-xs text-slate-700">
@@ -348,7 +348,7 @@ export default function ScheduleStep({
                   onClick={() => onSolutionIdx(i)}
                   className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
                     i === Math.min(solutionIdx, solutions.length - 1)
-                      ? "border-blue-600 bg-blue-600 text-white"
+                      ? "border-blue-600 bg-blue-600 text-slate-800"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                   }`}
                   title={`${s.metrics.totalGaps}h gaps · ${s.metrics.freeDays} free days${
@@ -373,7 +373,7 @@ export default function ScheduleStep({
             <select
               value={rankBy}
               onChange={(e) => onRankBy(e.target.value as RankPreference)}
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-blue-400 focus:outline-none"
             >
               {RANK_LABELS.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -390,7 +390,7 @@ export default function ScheduleStep({
         <Card className="p-4">
           <div className="mb-3 flex items-baseline justify-between">
             <h3 className="font-semibold text-slate-800">{svgTitle}</h3>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-slate-500">
               {blocks.length > 0
                 ? `${m.earliestStart ?? "–"} → ${m.latestEnd ?? "–"}`
                 : "no fixed-time classes"}
@@ -442,13 +442,13 @@ export default function ScheduleStep({
             <SectionTitle hint="100% of weekly hours, zero overlaps">Enrolled courses</SectionTitle>
             <ul className="space-y-2">
               {realRows.map((r) => (
-                <li key={r.code} className="rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5">
+                <li key={r.code} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="font-mono text-xs font-bold text-slate-700">{r.code}</span>
-                    <span className="text-[11px] text-slate-400">{r.credits} cr</span>
+                    <span className="text-[11px] text-slate-500">{r.credits} cr</span>
                   </div>
                   <div className="truncate text-xs text-slate-600">{r.name}</div>
-                  <div className="mt-0.5 text-[10.5px] text-slate-400">
+                  <div className="mt-0.5 text-[10.5px] text-slate-500">
                     {r.slots} · {r.faculty || "faculty TBD"} · {r.hours} h/wk
                   </div>
                 </li>
@@ -487,7 +487,7 @@ export default function ScheduleStep({
             >
               {saved ? "✓ Draft saved" : "Save as draft"}
             </Btn>
-            <p className="text-[11px] leading-snug text-slate-400">
+            <p className="text-[11px] leading-snug text-slate-500">
               The .ics creates weekly recurring events between each section’s start and end dates
               (self-paced placeholder sections are skipped). Drafts let you compare options before
               finalizing.
