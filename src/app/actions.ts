@@ -103,7 +103,7 @@ If no good replacement is found, return empty strings for both. Return ONLY vali
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": \`Bearer \${apiKey}\`,
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: "grok-beta",
@@ -122,7 +122,7 @@ If no good replacement is found, return empty strings for both. Return ONLY vali
     });
 
     if (!response.ok) {
-      throw new Error(\`Grok API error: \${response.statusText}\`);
+      throw new Error(`Grok API error: ${response.statusText}`);
     }
 
     const data = await response.json();
