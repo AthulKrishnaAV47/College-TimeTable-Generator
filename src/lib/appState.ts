@@ -57,6 +57,8 @@ export interface AppState {
   solveOutcome: SolveOutcome | null;
   /** renderable best-effort schedule when outcome === "impossible" */
   nearMiss: NearMissSchedule | null;
+  /** caution message set if AI replaced a course */
+  aiMessage?: string | null;
 }
 
 export const DEFAULT_STATE: AppState = {

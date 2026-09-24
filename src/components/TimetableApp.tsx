@@ -246,9 +246,51 @@ export default function TimetableApp({
         failure: null,
         solveOutcome: null,
         nearMiss: null,
+        aiMessage: null,
       }));
     },
     []
+  );
+
+  const handleReplaceCourse = useCallback(
+    (removeCode: string, addCode: string, isFallback: boolean = false) => {
+      setState((s) => {
+        const nextManualPicks = { ...s.manualPicks };
+        delete nextManualPicks[removeCode];
+        nextManualPicks[addCode] = true;
+
+        let nextAutoChosen = s.autoChosen;
+        if (nextAutoChosen) {
+           nextAutoChosen = nextAutoChosen.filter(c => c !== removeCode);
+           nextAutoChosen.push(addCode);
+        }
+        
+        const addedCourse = s.slotSheet?.courses.find(c => c.courseCode === addCode);
+        const removedCourse = enrolledCourses.find(c => c.courseCode === removeCode);
+        
+        const replacer = isFallback ? "The local fallback algorithm" : "Grok AI";
+        const aiMessage = `We couldn't generate a timetable with your original selections due to clashes. ${replacer} replaced [${removeCode}] ${removedCourse?.courseName || ''} with [${addCode}] ${addedCourse?.courseName || ''} to make it work.`;
+
+        // trigger a solve with new state on next render or we can just set the state and then user clicks solve,
+        // wait, let's just update the state and jump back to step 3 to solve again, or directly solve?
+        // It's safer to update picks and let user solve, OR we can solve immediately.
+        // If we set state and call runSolve, runSolve uses stale enrolledCourses.
+        // So let's just go back to step 3, but keep an AI message.
+        return {
+           ...s,
+           manualPicks: nextManualPicks,
+           autoChosen: nextAutoChosen,
+           solutions: null,
+           failure: null,
+           solveOutcome: null,
+           nearMiss: null,
+           step: 3, // Go back to sections step so they can solve again, or step 4 if we can solve.
+           aiMessage
+        };
+      });
+      // We will solve it in a useEffect if aiMessage is set, or let user click solve.
+    },
+    [enrolledCourses]
   );
 
   const saveDraft = useCallback(
@@ -475,6 +517,9 @@ export default function TimetableApp({
             onSaveDraft={saveDraft}
             onBack={() => patch({ step: 3 })}
             onReenroll={() => patch({ step: 2 })}
+            allCourses={state.slotSheet?.courses ?? []}
+            onReplaceCourse={handleReplaceCourse}
+            aiMessage={state.aiMessage}
           />
         )}
 

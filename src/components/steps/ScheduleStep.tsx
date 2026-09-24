@@ -19,6 +19,7 @@ import { solutionRuleViolations } from "@/lib/solver";
 import { downloadBlob, downloadText, slugify, svgToPngBlob } from "@/lib/download";
 import TimetableGrid from "@/components/TimetableGrid";
 import { Badge, Btn, Card, SectionTitle, Stat } from "@/components/ui";
+import { findAlternativeCourseAction } from "@/app/actions";
 
 /**
  * Step 5 (§3.5/§3.6): ranked conflict-free timetables, weekly grid, contact
@@ -42,6 +43,9 @@ interface Props {
   onSaveDraft: (solution: ScheduleSolution, label: string) => void;
   onBack: () => void;
   onReenroll: () => void;
+  allCourses: Course[];
+  onReplaceCourse: (removeCode: string, addCode: string, isFallback?: boolean) => void;
+  aiMessage?: string | null;
 }
 
 const RANK_LABELS: { id: RankPreference; label: string }[] = [
@@ -67,9 +71,14 @@ export default function ScheduleStep({
   onSaveDraft,
   onBack,
   onReenroll,
+  allCourses,
+  onReplaceCourse,
+  aiMessage,
 }: Props) {
   const [saved, setSaved] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const active: ScheduleSolution | null =
     solutions && solutions.length > 0
@@ -199,8 +208,27 @@ export default function ScheduleStep({
           </p>
         </div>
         <Card className="border-red-200 p-5">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge tone="red">No valid timetable</Badge>
+            {nearMiss && (
+              <Btn 
+                onClick={async () => {
+                  setAiLoading(true);
+                  setAiError(null);
+                  const res = await findAlternativeCourseAction(enrolledCourses, allCourses, nearMiss);
+                  if (res.success && res.result.removeCourse && res.result.addCourse) {
+                     onReplaceCourse(res.result.removeCourse, res.result.addCourse, res.fallback);
+                  } else {
+                     setAiError(res.error || "No suitable alternative found.");
+                  }
+                  setAiLoading(false);
+                }}
+                disabled={aiLoading}
+              >
+                {aiLoading ? "Thinking..." : "✨ Use AI to fix this"}
+              </Btn>
+            )}
+            {aiError && <span className="text-xs text-red-600">{aiError}</span>}
           </div>
           <p className="text-sm text-slate-700">{failure?.message}</p>
           {failure && failure.impossibleCourses.length > 0 && (
@@ -325,6 +353,17 @@ export default function ScheduleStep({
           <p className="text-sm font-semibold text-emerald-800">
             ✓ All {solutions!.length} option{solutions!.length === 1 ? "" : "s"} respect your
             no-class rules.
+          </p>
+        </div>
+      )}
+      
+      {aiMessage && (
+        <div className="rounded-xl border border-blue-300 bg-blue-50 px-4 py-3">
+          <p className="text-sm font-semibold text-blue-800">
+            ⚠ AI Adjusted Schedule
+          </p>
+          <p className="mt-0.5 text-xs text-blue-700">
+            {aiMessage}
           </p>
         </div>
       )}
