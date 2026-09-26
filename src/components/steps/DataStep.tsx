@@ -1,5 +1,6 @@
 "use client";
 
+import { validateUpload } from "@/lib/uploads";
 import { Fragment, useRef, useState } from "react";
 import { parseSlotSheet } from "@/lib/parse/slotSheet";
 import { parseEligibilityTable } from "@/lib/parse/eligibility";
@@ -46,6 +47,7 @@ function FilePanel({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const parseText = (text: string) => {
+    if (text.length > 1_000_000) { setError(kind, "Text exceeds the 1 MB limit."); return; }
     if (kind === "slotSheet") {
       const res = parseSlotSheet(text);
       if (res.courses.length === 0) {
@@ -69,6 +71,8 @@ function FilePanel({
     setBusy(true);
     setError(kind, undefined);
     try {
+      if (file.size > 3_000_000) throw new Error("Files must be no larger than 3 MB.");
+      validateUpload(file.name, file.type, new Uint8Array(await file.arrayBuffer()));
       if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
         const form = new FormData();
         form.append("kind", kind);

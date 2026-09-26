@@ -1,101 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
-import { extractText, extractTextItems, getDocumentProxy } from "unpdf";
+import { NextResponse } from "next/server";
 import { parseSlotSheet } from "@/lib/parse/slotSheet";
 import { parseEligibilityTable } from "@/lib/parse/eligibility";
-import { itemsToText, type PdfTextItem } from "@/lib/pdfLayout";
-
+import { requireUser } from "@/lib/server/supabase";
+import { ApiError, checkOrigin, errorResponse, readBody, readJson } from "@/lib/server/http";
+import { rateLimit } from "@/lib/server/rateLimit";
+import { extractPdf } from "@/lib/server/pdf";
+import { validateUpload } from "@/lib/uploads";
+import { z } from "zod";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/**
- * Server-side file parsing (§5 — PDF text extraction happens on Node, not in
- * the browser). Accepts multipart/form-data:
- *   kind: "slotSheet" | "eligibility"
- *   file: PDF (text extracted here) or .txt/.csv (read as text)
- * or application/json: { kind, text } for pasted text.
- *
- * PDFs are extracted with a layout-aware reconstructor (pdfLayout.ts): the
- * slot sheet is multi-column, and naive extraction glues neighbouring
- * columns' fragments onto each section's day lines, inventing class hours.
- * If item coordinates are unavailable we fall back to plain text extraction.
- *
- * Returns the raw extracted text plus the parsed result so the UI can show a
- * sanity-check preview before anything is used.
- */
-export async function POST(req: NextRequest) {
+export const maxDuration = 30;
+export async function POST(req: Request) {
   try {
+    checkOrigin(req);
+    const { user } = await requireUser();
+    await rateLimit(req, "parse", user.id, 20);
     const contentType = req.headers.get("content-type") ?? "";
-    let kind = "slotSheet";
-    let rawText = "";
-    let extraction = "text";
-
+    let kind: "slotSheet" | "eligibility", text: string, extraction = "text";
+    const kindSchema = z.enum(["slotSheet", "eligibility"]);
     if (contentType.includes("multipart/form-data")) {
-      const form = await req.formData();
-      kind = String(form.get("kind") ?? "slotSheet");
+      // Count bytes while streaming; Content-Length alone is attacker-controlled.
+      const bytes = await readBody(req, 3_100_000);
+      const form = await new Response(bytes as BodyInit, { headers: { "Content-Type": contentType } }).formData();
+      kind = kindSchema.parse(form.get("kind"));
       const file = form.get("file");
-      if (!(file instanceof File)) {
-        return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
-      }
-      const isPdf =
-        file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
-      if (isPdf) {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const pdf = await getDocumentProxy(bytes);
-        if (kind === "eligibility") {
-          const { text } = await extractText(pdf, { mergePages: true });
-          rawText = text;
-          extraction = "plain";
-        } else {
-          rawText = await extractLayoutAware(pdf);
-          extraction = "layout-aware";
-          if (!rawText.trim()) {
-            // Fallback: naive extraction (no coordinates available)
-            const { text } = await extractText(pdf, { mergePages: true });
-            rawText = text;
-            extraction = "plain";
-          }
-        }
-      } else {
-        rawText = await file.text();
-      }
-    } else {
-      const body = await req.json();
-      kind = String(body.kind ?? "slotSheet");
-      rawText = String(body.text ?? "");
-    }
-
-    if (!rawText.trim()) {
-      return NextResponse.json(
-        { error: "No text could be extracted from this file. If it is a scanned PDF, paste the text instead." },
-        { status: 422 }
-      );
-    }
-
-    if (kind === "eligibility") {
-      const parsed = parseEligibilityTable(rawText);
-      return NextResponse.json({ kind, text: rawText, extraction, ...parsed });
-    }
-    const parsed = parseSlotSheet(rawText);
-    return NextResponse.json({ kind, text: rawText, extraction, ...parsed });
-  } catch (err) {
-    console.error("parse error", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to parse the file." },
-      { status: 500 }
-    );
-  }
-}
-
-/** Layout-aware extraction: per-page items → column-major text. */
-async function extractLayoutAware(pdf: NonNullable<Awaited<ReturnType<typeof getDocumentProxy>>>): Promise<string> {
-  try {
-    const { items } = await extractTextItems(pdf);
-    const pages = Array.isArray(items) ? (items as PdfTextItem[][]) : [];
-    const pageTexts = pages
-      .map((pageItems) => itemsToText(pageItems ?? []))
-      .filter((t) => t.trim().length > 0);
-    return pageTexts.join("\n\n");
-  } catch {
-    return "";
-  }
+      if (!(file instanceof File)) throw new ApiError(400, "No file uploaded.");
+      const fileBytes = new Uint8Array(await file.arrayBuffer());
+      let format;
+      try { format = validateUpload(file.name, file.type, fileBytes); }
+      catch (e) { throw new ApiError(400, (e as Error).message); }
+      if (format === "pdf") { text = await extractPdf(fileBytes, kind); extraction = kind === "slotSheet" ? "layout-aware" : "plain"; }
+      else text = new TextDecoder("utf-8", { fatal: true }).decode(fileBytes);
+    } else if (contentType.includes("application/json")) {
+      const body = z.object({ kind: kindSchema, text: z.string().max(1_000_000) }).parse(await readJson(req, 1_100_000));
+      kind = body.kind; text = body.text;
+    } else throw new ApiError(415, "Use a file upload or JSON text.");
+    if (!text.trim()) throw new ApiError(422, "No text could be extracted. Scanned PDFs are unsupported; paste exported text instead.");
+    if (text.length > 1_000_000) throw new ApiError(413, "Extracted text is too large.");
+    const parsed = kind === "eligibility" ? parseEligibilityTable(text) : parseSlotSheet(text);
+    return NextResponse.json({ kind, text, extraction, ...parsed });
+  } catch (e) { return errorResponse(e); }
 }

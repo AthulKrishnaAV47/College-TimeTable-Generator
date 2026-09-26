@@ -1,11 +1,23 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TimetableApp from "@/components/TimetableApp";
 import LoginPage from "@/components/LoginPage";
-import Home from "@/app/page";
+import ProfileStep from "@/components/steps/ProfileStep";
+import { parseSlotSheet } from "@/lib/parse/slotSheet";
 import { SAMPLE_SLOT_SHEET, SAMPLE_ELIGIBILITY } from "@/lib/sample";
+
+const student = { id: "test-user", name: "Student", email: "student@example.com", verified: true, admin: false };
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === "/api/workspace") return new Response(JSON.stringify(options?.method === "PUT" ? { revision: 1 } : { state: null, drafts: [], revision: 0 }));
+    if (url === "/api/aliases") return new Response(JSON.stringify({ aliases: [] }));
+    if (url === "/api/datasets") return new Response(JSON.stringify({ datasets: [] }));
+    return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401 });
+  }));
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 /**
  * Full-wizard smoke test: sample data → parse → profile → pick subjects →
@@ -17,7 +29,7 @@ function panel(title: string): HTMLElement {
   const headings = screen.getAllByRole("heading", { level: 3 });
   const h = headings.find((el) => el.textContent?.includes(title));
   if (!h) throw new Error(`panel ${title} not found`);
-  const card = h.closest("div.rounded-2xl");
+  const card = h.closest("div.rounded-xl");
   if (!card) throw new Error(`card for ${title} not found`);
   return card as HTMLElement;
 }
@@ -25,7 +37,8 @@ function panel(title: string): HTMLElement {
 describe("TimetableApp wizard", () => {
   it("walks the full happy path with sample data", async () => {
     const user = userEvent.setup();
-    render(<TimetableApp />);
+    render(<TimetableApp user={student} />);
+    await screen.findByRole("heading", { level: 3, name: /File A/ });
 
     // Step 1: load sample data into both panels
     const slotPanel = panel("File A");
@@ -45,7 +58,7 @@ describe("TimetableApp wizard", () => {
     const tick = async (code: string) => {
       const cb = screen
         .getAllByRole("checkbox")
-        .find((el) => el.closest("label")?.textContent?.includes(code));
+        .find((el) => !el.getAttribute("aria-label")?.startsWith("Must include") && el.closest("label")?.textContent?.includes(code));
       if (!cb) throw new Error(`checkbox for ${code} not found`);
       await user.click(cb);
     };
@@ -80,57 +93,55 @@ describe("TimetableApp wizard", () => {
 
     // Save a draft
     await user.click(screen.getByRole("button", { name: /Save as draft/ }));
-    expect(await screen.findByText("✓ Draft saved")).toBeTruthy();
+    expect(await screen.findByText("✓ Draft added — syncing")).toBeTruthy();
 
     // Drafts step
     await user.click(screen.getByRole("button", { name: /Drafts & compare/ }));
     expect(screen.getByText(/Saved drafts \(1\)/)).toBeTruthy();
+
+    // Completing a course AFTER saving a draft must not be undone by Restore.
+    await user.click(screen.getByRole("button", { name: /Your profile/ }));
+    await user.type(screen.getByLabelText("Completed courses"), "19AI305");
+    await user.click(screen.getByRole("button", { name: /Drafts & compare/ }));
+    await user.click(screen.getByRole("button", { name: "Restore" }));
+    const restoredCheckboxes = screen.getAllByRole("checkbox");
+    expect(restoredCheckboxes.some(el => el.closest("label")?.textContent?.includes("19AI305"))).toBe(false);
+
   }, 30000);
 });
 
-describe("LoginPage (demo sign-in)", () => {
-  afterEach(cleanup);
-
-  it("validates input and emits the signed-in user", async () => {
-    const user = userEvent.setup();
-    const onLogin = vi.fn();
+describe("Real sign-in UI", () => {
+  it("does not treat an email or password as a successful login without the server", async () => {
+    const user = userEvent.setup(), onLogin = vi.fn();
     render(<LoginPage onLogin={onLogin} />);
-
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
-    expect(screen.getByText(/enter your name/i)).toBeTruthy();
-
-    await user.type(screen.getByLabelText("Your name"), "Athul");
-    await user.type(screen.getByLabelText("Email"), "athul@college.edu");
-    await user.type(screen.getByLabelText("Password"), "secret1");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
-
-    expect(onLogin).toHaveBeenCalledWith({ name: "Athul", email: "athul@college.edu" });
+    await user.type(screen.getByLabelText("Email"), "student@example.com");
+    await user.type(screen.getByLabelText("Password"), "not-a-real-password");
+    await user.click(screen.getByRole("button", { name: /^Sign in$/ }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Invalid credentials");
+    expect(onLogin).not.toHaveBeenCalled();
+    expect(localStorage.getItem("ttg:user:v1")).toBeNull();
   });
-
-  it("gates the wizard behind the login screen and supports sign-out", async () => {
-    window.localStorage.clear();
-    const user = userEvent.setup();
-    render(<Home />);
-
-    // Login screen first (wizard hidden)
+  it("offers signup and password reset flows", async () => {
+    const user = userEvent.setup(); render(<LoginPage onLogin={() => {}} />);
+    await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(screen.getByLabelText("Your name")).toBeTruthy();
-    expect(screen.queryByRole("heading", { level: 3, name: /File A/ })).toBeNull();
+    expect(screen.getByText(/12–128 characters/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    expect(screen.getByRole("button", { name: "Send reset link" })).toBeTruthy();
+    expect(screen.queryByLabelText("Password")).toBeNull();
+  });
+});
 
-    await user.type(screen.getByLabelText("Your name"), "Student");
-    await user.type(screen.getByLabelText("Email"), "s@college.edu");
-    await user.type(screen.getByLabelText("Password"), "pass");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
-
-    // Wizard appears after sign-in
-    expect(
-      await screen.findByRole("heading", { level: 3, name: /File A — MyCamu term slot sheet/ })
-    ).toBeTruthy();
-    expect(screen.getByText("Student")).toBeTruthy();
-
-    // Sign out returns to the login screen
-    await user.click(screen.getByRole("button", { name: /sign out/i }));
-    expect(await screen.findByLabelText("Your name")).toBeTruthy();
-
-    window.localStorage.clear();
+describe("Completion input", () => {
+  it("resolves EMPD and blocks unknown/ambiguous entries with a visible warning", async () => {
+    const user = userEvent.setup(), onChange = vi.fn();
+    const course = { ...parseSlotSheet(SAMPLE_SLOT_SHEET).courses[0], courseCode: "19AI303", courseName: "Engineering Mechanics and Product Development" };
+    render(<ProfileStep profile={{ year: "I", termLabel: "Term 2", completedCourseCodes: [] }} courses={[course]} onChange={onChange} onNext={() => {}} onBack={() => {}} />);
+    await user.type(screen.getByLabelText("Completed courses"), "EMPD");
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ completedCourseCodes: ["19AI303"] }));
+    expect((screen.getByRole("button", { name: /See eligible/ }) as HTMLButtonElement).disabled).toBe(false);
+    await user.type(screen.getByLabelText("Completed courses"), ", mystery");
+    expect(screen.getByText(/Couldn’t match to a known course/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: /See eligible/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

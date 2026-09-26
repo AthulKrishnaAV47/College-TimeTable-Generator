@@ -1,116 +1,80 @@
-<div align="center">
-  <h1>🎓 College Term Timetable Generator</h1>
-  <p><i>Turn a MyCamu ERP term slot sheet into a valid, conflict-free weekly timetable for a single term.</i></p>
-  <p>
-    <img src="https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js" alt="Next.js" />
-    <img src="https://img.shields.io/badge/React-19-blue?style=flat&logo=react" alt="React" />
-    <img src="https://img.shields.io/badge/TailwindCSS-4-38B2AC?style=flat&logo=tailwind-css" alt="Tailwind" />
-    <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript" alt="TypeScript" />
-  </p>
-</div>
+# MyCamu Term Timetable Generator · Beta
 
----
+Next.js / React / TypeScript / Tailwind scheduler for a single college term. Parse MyCamu File A (slot sheet) and File B (SBC/FC eligibility), exclude completed courses, and find compatible sections. Independent student project, not officially affiliated with any college or MyCamu.
 
-The college runs on a term system (1 semester = 2 terms of ~3 months). Each term a student enrolls in a subset of subjects classified as **SBC** (Skill Based Course) or **FC** (Foundation Course) that are valid for their year. Because a student must attend **100% of weekly contact hours** of every section they're placed in, no two chosen sections may overlap in day+time — this app finds such assignments automatically.
+## What is implemented
 
-## ✨ Features
+- **Canonical course resolution:** codes, names, significant-word initials and curated aliases (including `EMPD → 19AI303`). Ambiguous/unknown completions are visibly flagged, never guessed. Search + a checkbox picker avoids relying on abbreviations alone.
+- **One eligibility engine:** File A ∩ matching File B year rows − completed courses. Senior students inherit Year I rows. Manual selection, auto-select, retries and local replacement suggestions all use this pool. Runtime guards and a diagnostics panel expose solver inputs; changing completion/profile/data invalidates stale results.
+- **Real accounts:** Supabase Auth signup/login/verification/reset/logout, server-side validation, HTTP-only secure production cookies, provider-session revocation checks and distributed auth rate limits. No demo identity or localStorage tokens.
+- **Private cloud persistence:** Supabase Postgres + row-level security; atomic profile/workspace/draft save, cross-device conflict detection, visible save failures and explicit legacy browser import. PNG/ICS and JSON portability are retained.
+- **Shared terms:** moderated File A/B datasets, term picker, stale-data reporting, `/admin` JSON correction/reparse/publish/archive, aliases, aggregate counts and account-deletion queue.
+- **Must-include courses and section locks:** pin required subjects; lock a particular section or mandatory package. Auto retries and replacement suggestions cannot remove them. Changed/missing locked sections require explicit review; completion/year exclusions still win.
+- **Enrollment-readiness checklist:** compare subject/credit targets and SBC/FC minimums, inspect dropped auto-picks, rule violations, section dates and dataset source timestamps before exporting. Warnings require acknowledgement for each displayed plan; missing pins/locks or invalid dates block exports. Pins, locks and the initial auto-selection survive account reloads.
+- **Solver:** alternatives vs mandatory-combo sections, MRV backtracking, no-class day/time rules, ranked schedules, blocking pairs, near misses and retry logs. Rule relaxation is visibly labeled, not silently presented as a strict solution.
+- **Upload safety:** bounded files/text, PDF extension/MIME/signature checks, isolated parser process with resource/time limits and clean error handling.
+- **Responsive timetable:** desktop weekly grid, mobile daily agenda, Sunday when present, PNG and floating-local-time ICS exports.
+- **Operations:** Vercel config, environment template, optional redacted Sentry errors, privacy page, CI and deployment checklist.
 
-- 📄 **Smart PDF Parsing:** Parses the real MyCamu "course overview" PDF export (File A) and the SBC/FC eligibility table (File B). PDF extraction runs server-side via `pdf.js` with layout-aware column parsing.
-- 🎯 **Eligibility Engine:** Automatically intersects courses offered this term with your year's eligibility. Year II & III students automatically gain access to Year I subjects. 
-- 🤖 **Auto-selection Mode:** Finds a schedulable subject subset honoring target counts, credit totals, and category minimums (with visible retry logs and backtracking).
-- 🧩 **Smart Section Handling:** Supports both *alternatives (pick 1)* and *mandatory combos (take all)* (e.g., Lecture + Practical pairs). Pre-selects suggestions while allowing manual overrides.
-- ⚡ **Conflict-free Scheduling Engine:** Uses a backtracking search with the **MRV (minimum remaining values)** heuristic at 1-hour cell granularity. Zero-overlap guarantee with ranked solutions based on fewest gaps, free days, earliest finish, or preferred faculty.
-- 🛑 **No-Class Rules:** Add custom constraints like *no Saturday classes* or *no 08:00–10:00 classes*. The solver strictly respects these constraints and falls back gracefully to the *closest* valid schedule if no perfect match exists.
-- 🔍 **Actionable Diagnostics:** Instead of a generic failure, get exact **mutually blocking course pairs** (e.g., "19CS305 and 19AI410 have no non-overlapping section pair").
-- 📅 **Rich Exports:** Generates a visually beautiful weekly grid. Export as a **PNG image** or an **.ics calendar file** for Google/Apple Calendar.
-- 💾 **Drafts & Sessions:** Save multiple timetable drafts in `localStorage` to compare side-by-side. 
+## Run locally
 
----
+Node **22.12+** required.
 
-## 🚀 Getting Started
-
-Ensure you have Node.js installed.
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Start the development server
+```sh
+npm ci
+cp .env.example .env.local
+# Configure a DEVELOPMENT Supabase project and apply the SQL migration.
+# See docs/DEPLOYMENT.md for required auth/email settings.
 npm run dev
-# The app will be running at http://localhost:3000
+```
 
-# 3. Run the test suite (parser, solver, ICS, UI)
+Open the app, create and verify an account, then sign in. Choose an approved shared term or load sample data in both upload panels, complete your profile, select subjects, confirm sections and generate a timetable. Without configured services the app displays a setup error; it never falls back to fake authentication.
+
+```sh
+npm run typecheck
 npm test
-
-# 4. Build for production
 npm run build
+npm start
 ```
 
-### ⏱️ Try it in 30 seconds
+Build uses webpack for reliable child-process PDF-worker tracing. Development/start bind to `0.0.0.0`. In hosted previews, set `APP_URL` to the exact browser origin. All browser API calls are same-origin relative paths.
 
-1. Open the app and go to **Step 1**. 
-2. Click **Load sample data** on both panels (this populates a real-format sample slot sheet and eligibility table, covering all edge cases).
-3. Proceed and keep **Year I – Term 2**, then continue.
-4. Tick a few subjects (or just click **Auto**) and continue.
-5. Review alternative/combo toggles, then click **Find conflict-free timetables**.
-6. Pick your favorite option, export it, save as a draft, and compare!
+## Using the new planning safeguards
 
----
+1. In **Subjects**, set **Must-include courses** and your **Planning targets** (available in manual and auto modes).
+2. In **Sections**, choose **Lock section for …** to keep one exact section/package. A lock also makes the course required; unlock it before changing section mode or removing that course.
+3. If pinned subjects conflict, the app reports the blocking pair rather than dropping a required course. If a pin becomes completed/ineligible, remove its pin/lock explicitly from Subjects; eligibility is never overridden.
+4. In **Timetable**, read the **Enrollment-readiness checklist**. A conflict-free plan can still miss your targets. Review warnings and acknowledge them to enable PNG/ICS export; saving a draft remains available. Choosing another option resets acknowledgement.
+5. Dataset update timestamps are the **last known snapshot at load**, not a live freshness guarantee. For existing databases, apply `supabase/migrations/202609260002_dataset_revision_time.sql`. Existing dataset update times remain unknown until their next edit rather than inventing a backfilled timestamp.
 
-## 🏗️ Architecture
+## Deploy safely
 
-```text
-src/
-├── lib/
-│   ├── types.ts               # Domain model (Course, Section, Placement, Solution, Draft…)
-│   ├── time.ts                # Time utilities (cell merging, placeholder detection)
-│   ├── parse/slotSheet.ts     # File A parser (pure, line-based regexes)
-│   ├── parse/eligibility.ts   # File B parser (pure)
-│   ├── solver.ts              # Backtracking engine (MRV, ranking, auto-select)
-│   ├── grid.ts                # Grid model and UI hour-range derivation
-│   ├── svg.ts                 # Deterministic SVG renderer for PNG export
-│   └── ics.ts                 # RFC 5545 calendar generator
-├── app/
-│   ├── api/parse/route.ts     # Server-side PDF extraction (unpdf/pdf.js)
-│   └── page.tsx               # The main wizard UI
-└── components/                # Step components, grid UI, and state machine
-```
+**Start with [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).** It covers Supabase migrations/RLS, verification/reset email templates, SMTP, separate production resources, Upstash, Vercel HTTPS/cookies, Sentry, moderation, deletion operations and two-account staging checks.
 
-### 🧠 Scheduling Engine Deep Dive
+The repository contains deployment-ready configuration, **not provisioned cloud services or a verified live production release**. Never commit credentials. Never use a service-role key in this application. Production auth endpoints require distributed rate limiting.
 
-Each enrolled course becomes a list of **candidate placements**. The solver:
-1. Orders courses by **fewest consistent placements first (MRV)**, failing fast to prune the search tree.
-2. Backtracks over placements using an interval-collision busy list at 1-hour granularity.
-3. Collects up to 50 distinct solutions, deduplicates them, and ranks them by user preference.
-4. Applies **no-class rules** directly into the search tree as hard guarantees.
-5. Computes **blocking pairs** on failure to provide clear error messages to the user.
+## Architecture
 
----
+| Path | Responsibility |
+| --- | --- |
+| `src/lib/courseCodes.ts`, `eligibility.ts` | Canonical resolution and shared eligibility |
+| `src/lib/solver.ts` | Placement search, no-class fallback, eligible-only auto retries |
+| `src/components/TimetableApp.tsx` | Wizard, diagnostics, cloud sync and imports |
+| `src/lib/store.ts`, `validation.ts` | Serialized optimistic saves and runtime validation |
+| `src/app/api/auth`, `auth/confirm` | Server-only Supabase session lifecycle |
+| `src/app/api/workspace`, `datasets`, `aliases`, `admin` | Authenticated, owner-/role-scoped APIs |
+| `supabase/migrations` | Tables, RLS, atomic RPCs, role/session checks |
+| `src/app/api/parse`, `src/lib/server/pdf*` | Bounded uploads and isolated PDF extraction |
+| `src/lib/parse`, `pdfLayout.ts` | Deterministic parsers and column-aware reconstruction |
+| `src/lib/grid.ts`, `svg.ts`, `ics.ts` | Calendar rendering and portable exports |
+| `src/lib/__tests__`, `src/components/__tests__` | Parser/solver/UI, auth, persistence, PDF and PostgreSQL policy regressions |
 
-## 🛡️ Edge Cases Handled
+## Limitations and launch scope
 
-| Edge Case | How We Handle It |
-| :--- | :--- |
-| **Open Electives** | E.g. Japanese/Yoga: Handled as one trivial alternative. |
-| **1-min Placeholders** | Flagged as `self-paced`, excluded from conflicts and grid, shown as a note. |
-| **Two-faculty sections** | Safely parsed as an array, displayed joined, fully preference-aware. |
-| **Total Conflicts** | Reports precise blocking-pair errors with hints for relaxation. |
-| **Cross-Year Subjects** | Year I rows included automatically for senior students. |
-
----
-
-## 🛠️ Troubleshooting: Two-Column Slot Sheets
-
-The MyCamu export is often **multi-column**. Naive PDF extraction concatenates items visually, inventing class hours that create fake conflicts. We fix this via:
-
-1. **Layout-aware Extraction:** PDF items are rebuilt column-by-column from their `x/y` coordinates.
-2. **Artifact Armor:** Exact duplicate time cells within a section are purged.
-3. **Near-miss Diagnostics:** If no valid timetable exists, the app lists the *closest schedules* indicating exactly which hours are clashing.
-
----
-
-## 📝 Notes & Limitations
-
-- **Local First:** Session state, completed history, and drafts persist in `localStorage` only. No backend database required.
-- **Timezones:** ICS exports use floating local times (`DTSTART:20260123T150000`), letting your calendar app map it correctly.
-- **Grid Days:** The UI grid defaults to Mon–Sat, but Sunday cells are fully parsed and conflict-checked if present.
+- Verify eligibility and section dates against official registration information; this app does not enroll students.
+- Auto-selection is budgeted heuristic search and can return fewer courses after dropping a conflicting **unpinned, unlocked** subject; review the chosen counts/credits. It is not a proof that no better subset exists.
+- Unknown completed-history entries must be resolved/corrected against the loaded course index before continuing; no fuzzy guessing.
+- Drafts are snapshots; changing a shared dataset does not silently rewrite a student's plan. Select the term again to update it.
+- ICS uses floating local times. Self-paced administrative placeholders do not consume calendar slots.
+- Account deletion is an operator-processed request (30-day commitment); configure a monitored support channel before launch.
+- Friend-sharing, popularity analytics, registration reminders and aggregate blocking-pair telemetry remain deferred. See deployment guide for scope and launch gates.

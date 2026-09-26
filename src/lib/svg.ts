@@ -55,7 +55,7 @@ export function buildTimetableSvg(opts: SvgGridOptions): string {
   const labelWidth = 56;
   const headerH = 74;
   const footerH = opts.footer && opts.footer.length > 0 ? 26 + opts.footer.length * 18 : 14;
-  const days = GRID_DAYS;
+  const days = opts.blocks.some(b => b.day === "Sunday") ? [...GRID_DAYS, "Sunday" as const] : GRID_DAYS;
   const width = labelWidth + days.length * colWidth;
   const rows = Math.max(1, opts.endHour - opts.startHour);
   const height = headerH + rows * rowHeight + footerH;

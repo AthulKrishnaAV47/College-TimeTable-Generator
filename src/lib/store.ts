@@ -1,99 +1,52 @@
 "use client";
-
+import type { AppState } from "./appState";
 import type { DraftSnapshot } from "./types";
+import { DEFAULT_STATE } from "./appState";
+import { workspaceSchema } from "./validation";
 
-/**
- * Local persistence (§5): current session + saved timetable drafts in
- * localStorage. Keyed and versioned so older shapes fail safe.
- */
+export interface SessionUser { id: string; name: string; email: string; verified: boolean; admin: boolean }
+export class RequestError extends Error { constructor(public status: number, message: string) { super(message); } }
+export async function api<T = Record<string, unknown>>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers }, cache: "no-store" });
+  const body = await response.json();
+  if (!response.ok) throw new RequestError(response.status, body.error ?? "Request failed.");
+  return body as T;
+}
+export const newId = () => crypto.randomUUID();
 
-const SESSION_KEY = "ttg:session:v1";
-const DRAFTS_KEY = "ttg:drafts:v1";
-
-export function loadSession<T>(): T | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as T) : null;
-  } catch {
-    return null;
-  }
+export function createWorkspaceStore(userId: string) {
+  let revision = 0;
+  let queue = Promise.resolve();
+  let conflicted = false;
+  const headers = { "X-Workspace-Owner": userId };
+  return {
+    async load() {
+      const data = await api<{ state: Partial<AppState> | null; drafts: DraftSnapshot[]; revision: number }>("/api/workspace", { headers });
+      revision = data.revision;
+      return { state: { ...DEFAULT_STATE, ...data.state, step: data.state?.step === 4 ? 3 : data.state?.step ?? 0 }, drafts: data.drafts };
+    },
+    save(state: AppState, drafts: DraftSnapshot[]) {
+      const task = queue.then(async () => {
+        if (conflicted) throw new RequestError(409, "Another device changed this workspace. Export your unsaved work and reload.");
+        const payload = workspaceSchema.parse({ state, drafts, revision });
+        try {
+          const result = await api<{ revision: number }>("/api/workspace", { method: "PUT", headers, body: JSON.stringify(payload) });
+          revision = result.revision;
+        } catch (e) { if (e instanceof RequestError && e.status === 409) conflicted = true; throw e; }
+      });
+      queue = task.catch(() => {});
+      return task;
+    },
+  };
 }
 
-export function saveSession(state: unknown): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(state));
-  } catch {
-    // storage full / private mode — persistence is best-effort
-  }
+/** Explicit, user-confirmed import only: old browser data has no reliable owner. */
+export function readLegacyWorkspace() {
+  const raw = localStorage.getItem("ttg:session:v1");
+  if (!raw) throw new Error("No legacy session found in this browser.");
+  const parsed = workspaceSchema.parse({ state: { ...DEFAULT_STATE, ...JSON.parse(raw) }, drafts: JSON.parse(localStorage.getItem("ttg:drafts:v1") ?? "[]"), revision: 0 });
+  return { state: { ...DEFAULT_STATE, ...parsed.state, step: 0 }, drafts: parsed.drafts };
 }
-
-export function clearSession(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* noop */
-  }
-}
-
-export function loadDrafts(): DraftSnapshot[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(DRAFTS_KEY);
-    return raw ? (JSON.parse(raw) as DraftSnapshot[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveDrafts(drafts: DraftSnapshot[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
-  } catch {
-    /* noop */
-  }
-}
-
-export function newId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/* --------------------------- demo sign-in --------------------------- */
-
-export interface SessionUser {
-  name: string;
-  email: string;
-}
-
-const USER_KEY = "ttg:user:v1";
-
-export function loadUser(): SessionUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(USER_KEY);
-    return raw ? (JSON.parse(raw) as SessionUser) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveUser(user: SessionUser): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(USER_KEY, JSON.stringify(user));
-  } catch {
-    /* noop */
-  }
-}
-
-export function clearUser(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(USER_KEY);
-  } catch {
-    /* noop */
-  }
+export function clearLegacyWorkspace() {
+  for (const key of ["ttg:session:v1", "ttg:drafts:v1", "ttg:user:v1"]) localStorage.removeItem(key);
 }

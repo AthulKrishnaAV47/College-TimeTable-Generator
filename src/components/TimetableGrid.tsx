@@ -2,6 +2,7 @@
 
 import type { GridBlock } from "@/lib/grid";
 import { GRID_DAYS, PALETTE, gridRange } from "@/lib/grid";
+import { WEEKDAYS } from "@/lib/types";
 import { timeToMinutes } from "@/lib/time";
 
 /**
@@ -24,15 +25,26 @@ export default function TimetableGrid({
 
   const fmt = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
-  return (
-    <div className={`overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
-      <div className="grid" style={{ gridTemplateColumns: "64px repeat(6, minmax(112px, 1fr))" }}>
+  const days = blocks.some(b => b.day === "Sunday") ? [...GRID_DAYS, "Sunday" as const] : GRID_DAYS;
+  return (<>
+    <div className={`space-y-3 sm:hidden ${className}`} aria-label="Daily agenda">
+      {WEEKDAYS.filter(day => days.includes(day)).map(day => {
+        const daily = blocks.filter(b => b.day === day).sort((a, b) => a.startTime.localeCompare(b.startTime));
+        return <section key={day} className="rounded-xl border bg-white p-3"><h3 className="mb-2 font-bold">{day}</h3>
+          {daily.length ? daily.map((b, i) => <div key={`${b.courseCode}-${i}`} className="mb-2 rounded-lg border-l-4 p-3 text-sm" style={{ borderColor: PALETTE[b.colorIndex % PALETTE.length].border, background: PALETTE[b.colorIndex % PALETTE.length].bg }}>
+            <p className="font-bold">{b.startTime}–{b.endTime} · {b.courseCode}</p><p>{b.courseName}</p><p className="text-xs">{b.slotCode} · {b.batch} · {b.faculty || "Faculty TBD"}</p>
+          </div>) : <p className="text-sm text-slate-500">No classes</p>}
+        </section>;
+      })}
+    </div>
+    <div className={`hidden sm:block overflow-x-auto rounded-xl border border-slate-200 bg-white ${className}`}>
+      <div className="grid" style={{ gridTemplateColumns: `64px repeat(${days.length}, minmax(112px, 1fr))` }}>
         {/* Header row */}
         <div className="border-b border-slate-200 bg-slate-50" />
-        {GRID_DAYS.map((d) => (
+        {days.map((d) => (
           <div
             key={d}
-            className="border-b border-l border-slate-200 bg-slate-800 py-2 text-center text-[13px] font-semibold tracking-wide text-slate-800 uppercase"
+            className="border-b border-l border-slate-200 bg-slate-800 py-2 text-center text-[13px] font-semibold tracking-wide text-white uppercase"
           >
             {d.slice(0, 3)}
           </div>
@@ -50,7 +62,7 @@ export default function TimetableGrid({
             </div>
           ))}
         </div>
-        {GRID_DAYS.map((day) => {
+        {days.map((day) => {
           const dayBlocks = blocks.filter((b) => b.day === day);
           return (
             <div
@@ -111,5 +123,5 @@ export default function TimetableGrid({
         })}
       </div>
     </div>
-  );
+  </>);
 }

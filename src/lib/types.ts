@@ -53,6 +53,7 @@ export interface Section {
 export type SectionMode = "alternative" | "mandatory-combo";
 
 export interface Course {
+  aliases?: string[];
   courseCode: string; // "19AI305" or non-standard "QNX RTOS"
   credits: number;
   /** raw category string, e.g. "ENGINEERING SCIENCES - ENGINEERING SCIENCES" */
@@ -102,6 +103,10 @@ export interface StudentProfile {
 
 /** A faculty name attached to a section, for preference ranking. */
 export interface CoursePreferences {
+  /** Hard section/package choice. Never relaxed with no-class rules. */
+  lockedPlacementId?: string | null;
+  /** Snapshot identity detects changed section contents after a dataset refresh. */
+  lockedPlacementSignature?: string | null;
   /**
    * "alternative" → each section is a candidate; "mandatory-combo" → all
    * sections must be taken together as a single package.
@@ -127,6 +132,7 @@ export interface Placement {
 }
 
 export interface SolverOptions {
+  pinnedCourseCodes?: string[];
   /** stop collecting solutions after this many (default 50) */
   maxSolutions?: number;
   /** hard node budget to bound pathological searches (default 200_000) */
@@ -252,6 +258,7 @@ export interface EligibilitySummary {
 /* ------------------------------------------------------------------ */
 
 export interface DraftSnapshot {
+  termDatasetId?: string | null;
   id: string;
   label: string;
   createdAt: string;

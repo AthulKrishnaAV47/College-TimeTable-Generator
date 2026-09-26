@@ -44,7 +44,7 @@ export default function DraftsStep({ drafts, onUpdate, onRestore }: Props) {
   return (
     <div className="space-y-5">
       <Card className="p-5">
-        <SectionTitle hint="saved in this browser (localStorage)">
+        <SectionTitle hint="Private to your account — restoring keeps your current year and completed-course exclusions">
           Saved drafts ({drafts.length})
         </SectionTitle>
         {drafts.length === 0 ? (

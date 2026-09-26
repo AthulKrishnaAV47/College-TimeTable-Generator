@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import type {
   Course,
   CoursePreferences,
@@ -13,8 +13,10 @@ import type {
   ScheduleSolution,
   StudentProfile,
 } from "@/lib/types";
+import { assertEligiblePool, resolveCompleted } from "@/lib/courseCodes";
+import { requiredCourseCodes } from "@/lib/requirements";
 import { buildEligibility } from "@/lib/eligibility";
-import { buildPlacements, solveWithFallback, autoSelectCourses } from "@/lib/solver";
+import { buildPlacements, solveWithFallback } from "@/lib/solver";
 import type { AutoSelectResult } from "@/lib/solver";
 import {
   DEFAULT_STATE,
@@ -25,14 +27,9 @@ import {
   type ParsedEligibility,
   type ParsedSlotSheet,
 } from "@/lib/appState";
-import {
-  loadDrafts,
-  loadSession,
-  newId,
-  saveDrafts,
-  saveSession,
-  type SessionUser,
-} from "@/lib/store";
+import { createWorkspaceStore, readLegacyWorkspace, clearLegacyWorkspace, newId, api, type SessionUser } from "@/lib/store";
+import { downloadText } from "@/lib/download";
+import SharedTerms from "@/components/SharedTerms";
 import DataStep from "@/components/steps/DataStep";
 import ProfileStep from "@/components/steps/ProfileStep";
 import SubjectsStep from "@/components/steps/SubjectsStep";
@@ -46,39 +43,50 @@ export default function TimetableApp({
   user,
   onLogout,
 }: {
-  user?: SessionUser | null;
+  user: SessionUser;
   onLogout?: () => void;
-} = {}) {
+}) {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
+  const [aliases, setAliases] = useState<{ alias: string; course_code: string }[]>([]);
+  useEffect(() => { api<{ aliases: { alias: string; course_code: string }[] }>("/api/aliases").then(d => setAliases(d.aliases)).catch(() => {}); }, []);
+  const [solverPool, setSolverPool] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<DraftSnapshot[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
-  /* -------------------------- persistence -------------------------- */
+  const [syncStatus, setSyncStatus] = useState("Loading…");
+  const [loadError, setLoadError] = useState("");
+  const [retrySave, setRetrySave] = useState(0);
+  const store = useRef<ReturnType<typeof createWorkspaceStore> | null>(null);
+  if (!store.current) store.current = createWorkspaceStore(user.id);
+  const saveVersion = useRef(0);
   useEffect(() => {
-    const session = loadSession<AppState>();
-    if (session) {
-      setState({
-        ...DEFAULT_STATE,
-        ...session,
-        // older sessions predate the constraints field
-        constraints: {
-          excludedDays: session.constraints?.excludedDays ?? [],
-          excludedRanges: session.constraints?.excludedRanges ?? [],
-        },
-      });
-    }
-    setDrafts(loadDrafts());
-    setHydrated(true);
+    let active = true;
+    store.current!.load().then(data => {
+      if (!active) return;
+      setState(data.state); setDrafts(data.drafts); setHydrated(true); setSyncStatus("Saved to your account");
+    }).catch(e => { if (active) setLoadError(e.message); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    if (hydrated) saveSession(state);
-  }, [state, hydrated]);
+    if (!hydrated) return;
+    const version = ++saveVersion.current;
+    setSyncStatus("Unsaved changes…");
+    const timer = setTimeout(() => {
+      setSyncStatus("Saving…");
+      store.current!.save(state, drafts).then(() => {
+        if (version === saveVersion.current) setSyncStatus("Saved to your account");
+      }).catch(e => { if (version === saveVersion.current) setSyncStatus(`Not saved: ${e.message}`); });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [state, drafts, hydrated, retrySave]);
 
-  const updateDrafts = useCallback((next: DraftSnapshot[]) => {
-    setDrafts(next);
-    saveDrafts(next);
-  }, []);
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => { if (syncStatus !== "Saved to your account") { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [syncStatus]);
+  const updateDrafts = useCallback((next: DraftSnapshot[]) => setDrafts(next), []);
 
   const patch = useCallback(
     (p: Partial<AppState>) => setState((s) => ({ ...s, ...p })),
@@ -86,26 +94,25 @@ export default function TimetableApp({
   );
 
   /* -------------------------- derived data -------------------------- */
+  const indexedCourses = useMemo(() => (state.slotSheet?.courses ?? []).map(c => ({ ...c,
+    aliases: [...(c.aliases ?? []), ...aliases.filter(a => a.course_code === c.courseCode).map(a => a.alias)],
+  })), [state.slotSheet, aliases]);
   const summary: EligibilitySummary | null = useMemo(() => {
     if (!state.slotSheet || !state.eligibility) return null;
-    return buildEligibility(state.slotSheet.courses, state.eligibility.rows, state.profile);
-  }, [state.slotSheet, state.eligibility, state.profile]);
+    return buildEligibility(indexedCourses, state.eligibility.rows, state.profile);
+  }, [state.slotSheet, state.eligibility, state.profile, indexedCourses]);
 
+  const required = useMemo(() => requiredCourseCodes(state.pinnedCourseCodes, state.coursePrefs), [state.pinnedCourseCodes, state.coursePrefs]);
   const enrolledCourses: Course[] = useMemo(() => {
     if (!summary) return [];
     const all = [...summary.sbc, ...summary.fc];
     const chosen = state.mode === "auto" && state.autoChosen ? state.autoChosen : null;
-    if (chosen) {
-      return chosen
-        .map((code) => all.find((c) => c.courseCode === code))
-        .filter((c) => c !== undefined) as Course[];
-    }
-    return all.filter((c) => state.manualPicks[c.courseCode]);
-  }, [summary, state.mode, state.autoChosen, state.manualPicks]);
+    return all.filter(c => required.includes(c.courseCode) || (chosen ? chosen.includes(c.courseCode) : state.manualPicks[c.courseCode]));
+  }, [summary, state.mode, state.autoChosen, state.manualPicks, required]);
 
   const enrolledCodes = useMemo(
     () => new Set(enrolledCourses.map((c) => c.courseCode)),
-    [enrolledCourses]
+    [enrolledCourses, indexedCourses]
   );
 
   const prefsFor = useCallback(
@@ -125,9 +132,13 @@ export default function TimetableApp({
   /* -------------------------- solving -------------------------- */
   const runSolve = useCallback(
     (rankBy?: RankPreference) => {
-      if (enrolledCourses.length === 0) return;
+      if (enrolledCourses.length === 0 && required.length === 0) return;
+      if (resolveCompleted(state.profile.completedCourseCodes, indexedCourses).unmatched.length) { patch({ step: 1 }); return; }
+      assertEligiblePool(enrolledCourses, [...(summary?.sbc ?? []), ...(summary?.fc ?? [])], state.profile.completedCourseCodes);
+      setSolverPool(enrolledCourses.map(c => c.courseCode));
       const prefs = prefsFor(enrolledCourses);
       const r = solveWithFallback(enrolledCourses, prefs, {
+        pinnedCourseCodes: required,
         rankBy: rankBy ?? state.rankBy,
         maxSolutions: 50,
         constraints: state.constraints,
@@ -173,13 +184,15 @@ export default function TimetableApp({
         });
       }
     },
-    [enrolledCourses, prefsFor, state.rankBy, state.constraints, patch]
+    [enrolledCourses, prefsFor, state.rankBy, state.constraints, state.profile.completedCourseCodes, indexedCourses, summary, required, patch]
   );
 
   const handleAutoResult = useCallback(
     (_r: AutoSelectResult, chosenCodes: string[] | null) => {
       patch({
         autoChosen: chosenCodes,
+        autoLog: _r.attempts,
+        autoInitialCourseCodes: _r.attempts[0]?.selected ?? [],
         solutions: null,
         failure: null,
         solveOutcome: null,
@@ -200,25 +213,31 @@ export default function TimetableApp({
 
   const handleTogglePick = useCallback(
     (code: string) => {
+      if (required.includes(code)) return;
       setState((s) => ({
         ...s,
         manualPicks: { ...s.manualPicks, [code]: !s.manualPicks[code] },
-        autoChosen: null,
+        autoChosen: s.mode === "auto" && s.autoChosen ? s.autoChosen.filter(c => c !== code) : null, solutions: null, failure: null, nearMiss: null, solveOutcome: null, autoLog: null,
       }));
     },
-    []
+    [required]
   );
+
+  const handleTogglePin = useCallback((code: string) => {
+    setState(s => ({ ...s, pinnedCourseCodes: s.pinnedCourseCodes.includes(code) ? s.pinnedCourseCodes.filter(c => c !== code) : [...s.pinnedCourseCodes, code], autoLog: null, solutions: null, failure: null, nearMiss: null, solveOutcome: null }));
+  }, []);
 
   const handleAutoSettings = useCallback(
     (s: AutoSettings) => patch({ autoSettings: s }),
     [patch]
   );
 
-  const handleMode = useCallback((m: Mode) => patch({ mode: m }), [patch]);
+  const handleMode = useCallback((m: Mode) => patch({ mode: m, solutions: null, failure: null, nearMiss: null, solveOutcome: null }), [patch]);
 
   const handleProfile = useCallback(
     (p: StudentProfile) => {
-      setState((s) => ({ ...s, profile: p }));
+      setSolverPool([]);
+      setState((s) => ({ ...s, profile: p, autoChosen: null, autoLog: null, autoInitialCourseCodes: [], solutions: null, failure: null, nearMiss: null, solveOutcome: null, aiMessage: null }));
     },
     []
   );
@@ -255,6 +274,11 @@ export default function TimetableApp({
   const handleReplaceCourse = useCallback(
     (removeCode: string, addCode: string, isFallback: boolean = false) => {
       setState((s) => {
+        if (requiredCourseCodes(s.pinnedCourseCodes, s.coursePrefs).includes(removeCode)) throw new Error(`Cannot replace required course ${removeCode}. Unpin/unlock it explicitly first.`);
+        const eligible = s.slotSheet && s.eligibility ? buildEligibility(indexedCourses, s.eligibility.rows, s.profile) : null;
+        if (![...(eligible?.sbc ?? []), ...(eligible?.fc ?? [])].some(c => c.courseCode === addCode)) {
+          throw new Error(`Replacement ${addCode} is not eligible.`);
+        }
         const nextManualPicks = { ...s.manualPicks };
         delete nextManualPicks[removeCode];
         nextManualPicks[addCode] = true;
@@ -268,14 +292,10 @@ export default function TimetableApp({
         const addedCourse = s.slotSheet?.courses.find(c => c.courseCode === addCode);
         const removedCourse = enrolledCourses.find(c => c.courseCode === removeCode);
         
-        const replacer = isFallback ? "The local fallback algorithm" : "Grok AI";
-        const aiMessage = `We couldn't generate a timetable with your original selections due to clashes. ${replacer} replaced [${removeCode}] ${removedCourse?.courseName || ''} with [${addCode}] ${addedCourse?.courseName || ''} to make it work.`;
+        const replacer = isFallback ? "The local fallback algorithm" : "The local planner";
+        const aiMessage = `We couldn't generate a timetable with your original selections due to clashes. ${replacer} replaced [${removeCode}] ${removedCourse?.courseName || ''} with [${addCode}] ${addedCourse?.courseName || ''} as a suggestion. Regenerate the timetable to verify it is feasible.`;
 
-        // trigger a solve with new state on next render or we can just set the state and then user clicks solve,
-        // wait, let's just update the state and jump back to step 3 to solve again, or directly solve?
-        // It's safer to update picks and let user solve, OR we can solve immediately.
-        // If we set state and call runSolve, runSolve uses stale enrolledCourses.
-        // So let's just go back to step 3, but keep an AI message.
+        // Reconfirm sections before solving the suggested replacement.
         return {
            ...s,
            manualPicks: nextManualPicks,
@@ -284,13 +304,12 @@ export default function TimetableApp({
            failure: null,
            solveOutcome: null,
            nearMiss: null,
-           step: 3, // Go back to sections step so they can solve again, or step 4 if we can solve.
+           step: 3,
            aiMessage
         };
       });
-      // We will solve it in a useEffect if aiMessage is set, or let user click solve.
     },
-    [enrolledCourses]
+    [enrolledCourses, indexedCourses]
   );
 
   const saveDraft = useCallback(
@@ -299,7 +318,8 @@ export default function TimetableApp({
       const prefs = prefsFor(enrolledCourses);
       const draft: DraftSnapshot = {
         id: newId(),
-        label,
+        termDatasetId: state.termDatasetId ?? null,
+        label: label.slice(0, 160),
         createdAt: new Date().toISOString(),
         profile: state.profile,
         courseChoices: Object.entries(solution.placements).map(([code, p]) => ({
@@ -316,7 +336,7 @@ export default function TimetableApp({
       };
       updateDrafts([draft, ...drafts]);
     },
-    [drafts, enrolledCourses, prefsFor, state.profile, updateDrafts]
+    [drafts, enrolledCourses, prefsFor, state.profile, state.termDatasetId, updateDrafts]
   );
 
   const restoreDraft = useCallback(
@@ -325,30 +345,33 @@ export default function TimetableApp({
       const prefs: Record<string, CoursePreferences> = {};
       for (const c of d.courseChoices) {
         picks[c.courseCode] = true;
-        prefs[c.courseCode] = { sectionMode: c.sectionMode, preferredFaculty: null };
+        prefs[c.courseCode] = state.coursePrefs[c.courseCode]?.lockedPlacementId ? state.coursePrefs[c.courseCode] : { sectionMode: c.sectionMode, preferredFaculty: null };
       }
       patch({
-        profile: d.profile,
+        solutions: null, failure: null, nearMiss: null, solveOutcome: null, autoChosen: null, autoInitialCourseCodes: [],
+        profile: { ...state.profile, termLabel: d.profile.termLabel },
         mode: "manual",
         manualPicks: picks,
         coursePrefs: { ...state.coursePrefs, ...prefs },
         step: state.slotSheet && state.eligibility ? 2 : 0,
       });
     },
-    [patch, state.coursePrefs, state.slotSheet, state.eligibility]
+    [patch, state.coursePrefs, state.slotSheet, state.eligibility, state.profile]
   );
 
   const step = state.step;
   const canGo = (i: number) => {
-    if (i === 0) return true;
+    if (i === 0 || i === 5) return true;
     if (!state.slotSheet || !state.eligibility || !summary) return false;
     if (i === 1) return true;
+    if (resolveCompleted(state.profile.completedCourseCodes, indexedCourses).unmatched.length) return false;
     if (i === 2) return true;
     if (i === 3) return enrolledCodes.size > 0;
     if (i === 4) return enrolledCodes.size > 0;
     return true;
   };
 
+  if (loadError) return <main className="p-10"><p role="alert">Could not load your account: {loadError}</p><button onClick={() => location.reload()}>Retry</button><button onClick={onLogout}>Sign out</button></main>;
   if (!hydrated) {
     return (
       <main className="mx-auto flex max-w-5xl items-center justify-center px-4 py-32 text-center text-lg text-slate-500 animate-pulse font-medium">
@@ -360,6 +383,24 @@ export default function TimetableApp({
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <section className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-white p-4 text-sm">
+        <strong>Beta</strong><span role="status">{syncStatus}</span>
+        {syncStatus.startsWith("Not saved") && <button className="underline" onClick={() => setRetrySave(v => v + 1)}>Retry save</button>}
+        <button className="underline" onClick={() => downloadText(JSON.stringify({ state, drafts }, null, 2), "my-timetable-data.json", "application/json")}>Export my data</button>
+        <button className="underline" onClick={async () => {
+          if (!window.confirm("Import old browser data into THIS account? Only proceed if this is your own data. This replaces your current workspace and drafts.")) return;
+          try { const legacy = readLegacyWorkspace(); await store.current!.save(legacy.state, legacy.drafts); setState(legacy.state); setDrafts(legacy.drafts); clearLegacyWorkspace(); }
+          catch (e) { setSyncStatus(`Not saved: ${e instanceof Error ? e.message : "Import failed"}`); }
+        }}>Import legacy browser data</button>
+        <button className="underline" onClick={async () => {
+          if (!window.confirm("Request deletion of your account and private data within 30 days?")) return;
+          try { const result = await api<{ message: string }>("/api/auth/delete", { method: "POST", body: "{}" }); window.alert(result.message); }
+          catch (e) { window.alert(e instanceof Error ? e.message : "Request failed"); }
+        }}>Request account deletion</button>
+        {user.admin && <a href="/admin" className="underline">Moderator console</a>}
+        <a href="/privacy" className="underline">Privacy</a>
+      </section>
+      {!user.verified && <p className="mb-4 rounded-xl bg-amber-50 p-4">Verify your email before submitting shared datasets. <button className="underline" onClick={async () => { try { const result = await api<{ message: string }>("/api/auth/resend", { method: "POST", body: "{}" }); alert(result.message); } catch (e) { alert(e instanceof Error ? e.message : "Unable to send email"); } }}>Resend verification</button></p>}
       {/* Header */}
       <header className="mb-7">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[2rem] border border-white/60 bg-white/70 px-6 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl transition-all">
@@ -388,7 +429,7 @@ export default function TimetableApp({
             </button>
             {onLogout && (
               <button
-                onClick={onLogout}
+                onClick={() => { if (syncStatus === "Saved to your account" || window.confirm("There are unsaved changes. Sign out anyway?")) onLogout?.(); }}
                 className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:scale-105 hover:border-indigo-200 hover:text-indigo-700 hover:shadow-md"
               >
                 <LogOut className="h-4 w-4" />
@@ -400,7 +441,7 @@ export default function TimetableApp({
         <div className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
             <h1 className="bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-500 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent">
-              Term Timetable Generator
+              Term Timetable Generator · Beta
             </h1>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-500">
               Turn your MyCamu term slot sheet into a perfect, conflict-free weekly timetable. Ensure 100% of your contact hours are met with zero day or time collisions.
@@ -448,17 +489,30 @@ export default function TimetableApp({
         })}
       </nav>
 
+      <details className="mb-4 rounded-xl border bg-white p-4 text-xs">
+        <summary className="cursor-pointer font-semibold">Show diagnostics</summary>
+        <pre className="mt-2 overflow-auto">{JSON.stringify({
+          completed: resolveCompleted(state.profile.completedCourseCodes, indexedCourses),
+          eligible: [...(summary?.sbc ?? []), ...(summary?.fc ?? [])].map(c => c.courseCode),
+          pinned: state.pinnedCourseCodes, requiredIncludingLocks: required, sectionLocks: Object.fromEntries(Object.entries(state.coursePrefs).filter(([, p]) => p.lockedPlacementId)),
+          solverPool, autoAttempts: state.autoLog,
+        }, null, 2)}</pre>
+      </details>
       {/* Steps */}
       <div className="rounded-3xl bg-white/60 p-6 shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-xl sm:p-8">
+        {step === 0 && <SharedTerms slotSheet={state.slotSheet} eligibility={state.eligibility} termLabel={state.profile.termLabel} datasetId={state.termDatasetId} onSelect={d => {
+          setSolverPool([]);
+          patch({ slotSheet: d.slot_sheet, eligibility: d.eligibility, termDatasetId: d.id, datasetSource: { label: d.term_label, updatedAt: d.updated_at ?? null, loadedAt: new Date().toISOString() }, profile: { ...state.profile, termLabel: d.term_label }, manualPicks: {}, autoChosen: null, autoLog: null, autoInitialCourseCodes: [], solutions: null, failure: null, nearMiss: null, solveOutcome: null });
+        }} />}
         {step === 0 && (
           <DataStep
             slotSheet={state.slotSheet}
             eligibility={state.eligibility}
             onSlotSheet={(p: ParsedSlotSheet) =>
-              patch({ slotSheet: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
+              patch({ datasetSource: null, autoInitialCourseCodes: [], termDatasetId: null, slotSheet: p, autoChosen: null, autoLog: null, manualPicks: {}, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
             }
             onEligibility={(p: ParsedEligibility) =>
-              patch({ eligibility: p, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
+              patch({ datasetSource: null, autoInitialCourseCodes: [], termDatasetId: null, eligibility: p, autoChosen: null, autoLog: null, manualPicks: {}, solutions: null, failure: null, solveOutcome: null, nearMiss: null })
             }
             onNext={() => patch({ step: 1 })}
           />
@@ -467,7 +521,7 @@ export default function TimetableApp({
         {step === 1 && state.slotSheet && (
           <ProfileStep
             profile={state.profile}
-            courses={state.slotSheet.courses}
+            courses={indexedCourses}
             onChange={handleProfile}
             onNext={() => patch({ step: 2 })}
             onBack={() => patch({ step: 0 })}
@@ -481,6 +535,8 @@ export default function TimetableApp({
             enrolledCodes={enrolledCodes}
             onMode={handleMode}
             onTogglePick={handleTogglePick}
+            onTogglePin={handleTogglePin}
+            onUnlock={code => handleChangePrefs(code, { ...state.coursePrefs[code], lockedPlacementId: null, lockedPlacementSignature: null })}
             onAutoSettings={handleAutoSettings}
             onAutoResult={handleAutoResult}
             onNext={() => patch({ step: 3 })}
@@ -502,6 +558,8 @@ export default function TimetableApp({
 
         {step === 4 && (
           <ScheduleStep
+            readinessInput={{ eligible: [...(summary?.sbc ?? []), ...(summary?.fc ?? [])], targets: state.autoSettings, pinnedCourseCodes: state.pinnedCourseCodes, prefs: state.coursePrefs, constraints: state.constraints, initialAutoCodes: state.mode === "auto" ? state.autoInitialCourseCodes : [], datasetSource: state.datasetSource }}
+            protectedCodes={required}
             profile={state.profile}
             enrolledCourses={enrolledCourses}
             rankBy={state.rankBy}
@@ -517,7 +575,7 @@ export default function TimetableApp({
             onSaveDraft={saveDraft}
             onBack={() => patch({ step: 3 })}
             onReenroll={() => patch({ step: 2 })}
-            allCourses={state.slotSheet?.courses ?? []}
+            allCourses={[...(summary?.sbc ?? []), ...(summary?.fc ?? [])]}
             onReplaceCourse={handleReplaceCourse}
             aiMessage={state.aiMessage}
           />
@@ -534,7 +592,7 @@ export default function TimetableApp({
           &amp; III also includes Year I subjects) − completed courses. Conflict checks run at 1-hour
           granularity across every enrolled section; 1-minute administrative placeholders are treated
           as self-paced and never block a schedule, and your no-class day/time rules are hard solver
-          constraints. Session data and drafts live only in your browser’s localStorage.
+          constraints. Your profile and drafts are private and saved to your account.
         </p>
         <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition-all hover:scale-105 hover:border-slate-300 hover:shadow">
           <span>Created by Athul Krishna A V</span>

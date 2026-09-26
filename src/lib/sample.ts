@@ -127,7 +127,24 @@ Date: 21-01-2026 to 28-03-2026
 Monday: 11:00 - 12:00
 Wednesday: 14:00 - 15:0015:00 - 16:00`;
 
+// Small, internally consistent demo paired with SAMPLE_SLOT_SHEET.
 export const SAMPLE_ELIGIBILITY = `Course Code | SBC or FC | Year
+19AI301 | SBC | I
+19AI305 | FC | I
+19CS305 | FC | I
+19EE305 | FC | I
+19JP301 | SBC | I
+19CY801 | FC | I
+19HS801 | FC | I
+19CS305 | FC | II & III
+19AI410 | FC | II & III
+19DE301 | FC | II & III
+19XX301 | SBC | I
+19XX302 | FC | I
+`;
+
+// Historical real-format reference, not a substitute for this term's File B.
+export const REFERENCE_ELIGIBILITY = `Course Code | SBC or FC | Year
 19AI301     | SBC       | I
 19AI302     | FC        | I
 19AI303     | FC        | I

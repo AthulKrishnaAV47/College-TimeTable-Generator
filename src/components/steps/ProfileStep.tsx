@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Course, StudentProfile } from "@/lib/types";
-import { normCode } from "@/lib/eligibility";
+import { normCode, resolveCompleted, matchesCourseSearch } from "@/lib/courseCodes";
 import { Badge, Btn, Card, SectionTitle } from "@/components/ui";
 
 /**
@@ -22,37 +22,20 @@ interface Props {
 export default function ProfileStep({ profile, courses, onChange, onNext, onBack }: Props) {
   const [rawCompleted, setRawCompleted] = useState(profile.completedCourseCodes.join(", "));
 
-  const offeredCodes = useMemo(
-    () => new Set(courses.map((c) => normCode(c.courseCode))),
-    [courses]
-  );
-
-  const completed = useMemo(
-    () =>
-      rawCompleted
-        .split(/[\n,;]+/)
-        .map((s) => s.trim().toUpperCase())
-        .filter((s) => s.length > 0),
-    [rawCompleted]
-  );
-
-  const unmatched = completed.filter((c) => !offeredCodes.has(c));
+  const entries = rawCompleted.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+  const { codes: completed, unmatched } = resolveCompleted(entries, courses);
 
   const commit = (next: Partial<StudentProfile>) => {
     onChange({
       ...profile,
       ...next,
-      completedCourseCodes: completed,
+      completedCourseCodes: [...completed, ...unmatched],
     });
   };
 
   const [search, setSearch] = useState("");
   const filteredCourses = useMemo(() => {
-    const query = search.toLowerCase();
-    return courses.filter((c) => 
-      (c.courseCode || "").toLowerCase().includes(query) || 
-      (c.courseName || "").toLowerCase().includes(query)
-    );
+    return courses.filter(c => matchesCourseSearch(c, search, courses));
   }, [courses, search]);
 
   const toggleCompleted = (code: string) => {
@@ -60,10 +43,10 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
     const next = completed.includes(norm)
       ? completed.filter(c => c !== norm)
       : [...completed, norm];
-    setRawCompleted(next.join(", ")); // sync raw state
+    setRawCompleted([...next, ...unmatched].join(", ")); // sync raw state
     onChange({
       ...profile,
-      completedCourseCodes: next,
+      completedCourseCodes: [...next, ...unmatched],
     });
   };
 
@@ -74,7 +57,7 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
       ...profile,
       year,
       termLabel: year === "I" ? `Year I${term}` : `Year II & III${term}`,
-      completedCourseCodes: completed,
+      completedCourseCodes: [...completed, ...unmatched],
     });
   };
 
@@ -152,6 +135,15 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
         <SectionTitle hint="Select the courses you have already completed. They will be excluded from your eligible list.">
           Already-completed courses
         </SectionTitle>
+        <label className="mb-3 block text-sm">Completed course codes, names or abbreviations (comma separated)
+          <textarea aria-label="Completed courses" className="mt-1 w-full rounded-lg border p-2" value={rawCompleted}
+            onChange={e => {
+              setRawCompleted(e.target.value);
+              const entries = e.target.value.split(/[\n,;]+/).filter(s => s.trim());
+              const result = resolveCompleted(entries, courses);
+              onChange({ ...profile, completedCourseCodes: [...result.codes, ...result.unmatched] });
+            }} />
+        </label>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -194,7 +186,7 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
           {completed.length > 0 && <Badge tone="blue">{completed.length} completed</Badge>}
           {unmatched.length > 0 && (
             <Badge tone="amber">
-              not offered this term (kept in history): {unmatched.join(", ")}
+              Couldn’t match to a known course; choose from the list or correct/remove the entry: {unmatched.join(", ")}
             </Badge>
           )}
           {completed.length === 0 && <span className="text-slate-500">None yet — fine for Year I.</span>}
@@ -205,7 +197,7 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
         <Btn variant="secondary" onClick={onBack}>
           ← Back
         </Btn>
-        <Btn onClick={onNext}>See eligible subjects →</Btn>
+        <Btn onClick={onNext} disabled={unmatched.length > 0}>See eligible subjects →</Btn>
       </div>
     </div>
   );
