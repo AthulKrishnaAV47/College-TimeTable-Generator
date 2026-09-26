@@ -6,10 +6,8 @@ import type {
   StudentProfile,
 } from "./types";
 
-/** Normalize a course code for comparison (trim + uppercase). */
-export function normCode(code: string): string {
-  return code.trim().toUpperCase();
-}
+import { normCode, resolveCourseCode } from "./courseCodes";
+export { normCode } from "./courseCodes";
 
 /**
  * §3.2 — Eligible subjects =
@@ -30,24 +28,24 @@ export function buildEligibility(
   rows: EligibilityRow[],
   profile: StudentProfile
 ): EligibilitySummary {
-  const completed = new Set(profile.completedCourseCodes.map(normCode));
+  const completed = new Set(profile.completedCourseCodes.map(c => resolveCourseCode(c, courses) ?? normCode(c)));
 
   // code → type for the student's year (preserve File A order)
   const typeByCode = new Map<string, "SBC" | "FC">();
   const allCodes = new Set<string>();
   // Pass 1: the student's own year rows (authoritative on conflicts).
   for (const r of rows) {
-    allCodes.add(r.courseCode);
+    allCodes.add(normCode(r.courseCode));
     if (r.year === profile.year) {
-      typeByCode.set(r.courseCode, r.type);
+      typeByCode.set(normCode(r.courseCode), r.type);
     }
   }
   // Pass 2: Year II & III also inherit Year I rows for codes not already
   // classified at their own level.
   if (profile.year === "II & III") {
     for (const r of rows) {
-      if (r.year === "I" && !typeByCode.has(r.courseCode)) {
-        typeByCode.set(r.courseCode, r.type);
+      if (r.year === "I" && !typeByCode.has(normCode(r.courseCode))) {
+        typeByCode.set(normCode(r.courseCode), r.type);
       }
     }
   }

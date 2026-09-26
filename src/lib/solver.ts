@@ -1,3 +1,5 @@
+import { requiredCourseCodes, missingRequiredFailure } from "./requirements";
+import { assertEligiblePool } from "./courseCodes";
 import {
   type BlockingPair,
   type Course,
@@ -11,6 +13,7 @@ import {
   type SolveOutcome,
   type SolverFailure,
   type SolverResult,
+  type SolverOptions,
   type TimeCell,
 } from "./types";
 import { cellsOverlap, isPlaceholderCell, mergeCells, rangesOverlap, timeToMinutes } from "./time";
@@ -29,6 +32,20 @@ import { normCode } from "./eligibility";
  * (impossible to attend).
  */
 export function buildPlacements(course: Course, prefs: CoursePreferences): Placement[] {
+  const placements = buildUnlockedPlacements(course, prefs);
+  return prefs.lockedPlacementId ? placements.filter(p => p.id === prefs.lockedPlacementId && (!prefs.lockedPlacementSignature || placementSignature(p) === prefs.lockedPlacementSignature)) : placements;
+}
+
+/** Compare contents, not just a slot label that can be reused in a new term. */
+export function placementSignature(placement: Placement): string {
+  return JSON.stringify(placement.sections.map(s => ({
+    batch: s.batch, slotCode: s.slotCode, department: s.department,
+    faculty: [...s.faculty].sort(), startDate: s.startDate, endDate: s.endDate,
+    cells: s.weeklyCells.map(c => `${c.day}:${c.startTime}-${c.endTime}`).sort(), selfPaced: s.selfPaced,
+  })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+}
+
+function buildUnlockedPlacements(course: Course, prefs: CoursePreferences): Placement[] {
   if (course.sections.length === 0) return [];
   if (prefs.sectionMode === "mandatory-combo") {
     const all = course.sections;
@@ -121,7 +138,9 @@ export function buildAllPlacements(
         courseCode: course.courseCode,
         reason:
           built.length === 0
-            ? course.sections.length === 0
+            ? p.lockedPlacementId
+              ? "locked section/package is unavailable or invalid; explicitly unlock or choose another section"
+              : course.sections.length === 0
               ? "no sections were parsed for this course"
               : "its mandatory combo contains two sections that overlap each other"
             : "every one of its sections falls on an excluded day or inside an excluded time window (no-class rules)",
@@ -165,13 +184,10 @@ function orderPlacement(p: Placement, pref: string | null): number {
 export function solve(
   courses: Course[],
   prefs: Record<string, CoursePreferences>,
-  options: {
-    maxSolutions?: number;
-    maxNodes?: number;
-    rankBy?: RankPreference;
-    constraints?: ScheduleConstraints;
-  } = {}
+  options: SolverOptions = {}
 ): SolverResult {
+  const missing = missingRequiredFailure(requiredCourseCodes(options.pinnedCourseCodes, prefs), courses.map(c => c.courseCode));
+  if (missing) return missing;
   const maxSolutions = options.maxSolutions ?? 50;
   const maxNodes = options.maxNodes ?? 200_000;
   const rankBy = options.rankBy ?? "fewest-gaps";
@@ -596,12 +612,7 @@ export interface FallbackSolveResult {
 export function solveWithFallback(
   courses: Course[],
   prefs: Record<string, CoursePreferences>,
-  options: {
-    maxSolutions?: number;
-    maxNodes?: number;
-    rankBy?: RankPreference;
-    constraints?: ScheduleConstraints;
-  } = {}
+  options: SolverOptions = {}
 ): FallbackSolveResult {
   const constraints = options.constraints ?? null;
   const rankBy = options.rankBy ?? "fewest-gaps";
@@ -621,6 +632,7 @@ export function solveWithFallback(
 
   // 2. Relaxed: ignore the rules, then rank by fewest rule violations.
   const relaxed = solve(courses, prefs, {
+    pinnedCourseCodes: options.pinnedCourseCodes,
     rankBy,
     maxSolutions: Math.max(options.maxSolutions ?? 50, 200),
     maxNodes: options.maxNodes,
@@ -658,6 +670,9 @@ export function solveWithFallback(
 /* ------------------------------------------------------------------ */
 
 export interface AutoSelectOptions {
+  pinnedCourseCodes?: string[];
+  completedCourseCodes?: string[];
+  onCandidatePool?: (codes: string[]) => void;
   /** desired number of subjects (overrides targetCredits when set) */
   targetCount?: number | null;
   /** desired total credits */
@@ -698,8 +713,13 @@ export function autoSelectCourses(
   prefs: Record<string, CoursePreferences>,
   options: AutoSelectOptions
 ): AutoSelectResult {
+  assertEligiblePool(eligible, eligible, options.completedCourseCodes);
   const attempts: AutoSelectResult["attempts"] = [];
   const maxAttempts = options.maxAttempts ?? 30;
+  const required = requiredCourseCodes(options.pinnedCourseCodes, prefs);
+  const missing = missingRequiredFailure(required, eligible.map(c => c.courseCode));
+  if (missing) return { ok: false, chosen: [], solution: null, failure: missing, attempts };
+  const pinned = new Set(required);
 
   // Constraint-aware option counts: courses with zero feasible placements
   // (structurally or by no-class rules) are the likeliest bottlenecks and
@@ -724,8 +744,8 @@ export function autoSelectCourses(
   const fcPool = sortByValue(candidates.filter((c) => !isSbc(c)));
 
   const pickInitial = (count: number | null, creditTarget: number | null): Candidate[] => {
-    const chosen: Candidate[] = [];
-    const used = new Set<string>();
+    const chosen: Candidate[] = candidates.filter(c => pinned.has(c.code));
+    const used = new Set<string>(chosen.map(c => c.code));
     const take = (pool: Candidate[], n: number) => {
       for (const c of pool) {
         if (n <= 0) break;
@@ -735,8 +755,8 @@ export function autoSelectCourses(
         n--;
       }
     };
-    take(sbcPool, minSBC);
-    take(fcPool, minFC);
+    take(sbcPool, minSBC - chosen.filter(isSbc).length);
+    take(fcPool, minFC - chosen.filter(c => !isSbc(c)).length);
     for (const c of sortByValue(candidates.filter((x) => !used.has(x.code)))) {
       if (count !== null && chosen.length >= count) break;
       if (count === null && creditTarget !== null) {
@@ -765,7 +785,11 @@ export function autoSelectCourses(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const courses = current.map((c) => c.course);
+    assertEligiblePool(courses, eligible, options.completedCourseCodes);
+    if (required.some(code => !current.some(c => c.code === code))) throw new Error("Solver retry dropped a required course.");
+    options.onCandidatePool?.(courses.map(c => c.courseCode));
     const result = solve(courses, prefs, {
+      pinnedCourseCodes: required,
       rankBy: options.rankBy,
       maxSolutions: 20,
       constraints: options.constraints,
@@ -795,11 +819,10 @@ export function autoSelectCourses(
     );
     let repaired = false;
     for (const victim of byConstrainedness) {
+      if (pinned.has(victim.code)) continue;
       const victimIsSbc = isSbc(victim);
       const remainingSbc = current.filter((c) => c !== victim && isSbc(c)).length;
       const remainingFc = current.filter((c) => c !== victim && !isSbc(c)).length;
-      if (victimIsSbc && remainingSbc < minSBC) continue;
-      if (!victimIsSbc && remainingFc < minFC) continue;
 
       const pool = sortByValue(
         candidates.filter(
@@ -811,6 +834,8 @@ export function autoSelectCourses(
       if (replacement) {
         current = [...current.slice(0, idx), replacement, ...current.slice(idx + 1)];
       } else {
+        if (victimIsSbc && remainingSbc < minSBC) continue;
+        if (!victimIsSbc && remainingFc < minFC) continue;
         current = current.filter((c) => c !== victim);
       }
       repaired = true;

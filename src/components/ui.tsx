@@ -10,7 +10,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-slate-200/80 bg-white shadow-md shadow-slate-200/60 ${className}`}>
+    <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -35,13 +35,13 @@ export function Btn({
 }) {
   const styles: Record<string, string> = {
     primary:
-      "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 shadow-md shadow-blue-600/20",
+      "bg-blue-600 text-white border border-blue-700 hover:bg-blue-700",
     secondary:
-      "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 disabled:text-slate-300 disabled:cursor-not-allowed shadow-sm",
-    ghost: "bg-transparent text-slate-600 hover:bg-slate-100 disabled:text-slate-300",
-    danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 shadow-md shadow-red-600/20",
+      "bg-white border border-slate-300 hover:bg-slate-50 text-slate-700",
+    ghost: "bg-transparent text-slate-600 hover:bg-slate-100",
+    danger: "bg-red-600 text-white border border-red-700 hover:bg-red-700",
     success:
-      "bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-300 shadow-md shadow-emerald-600/20",
+      "bg-emerald-600 text-white border border-emerald-700 hover:bg-emerald-700",
   };
   return (
     <button
@@ -49,7 +49,7 @@ export function Btn({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${styles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none ${styles[variant]} ${className}`}
     >
       {children}
     </button>
@@ -66,7 +66,7 @@ export function Badge({
   className?: string;
 }) {
   const tones: Record<string, string> = {
-    slate: "bg-slate-100 text-slate-600 border-slate-200",
+    slate: "bg-slate-100 text-slate-700 border-slate-200",
     blue: "bg-blue-50 text-blue-700 border-blue-200",
     green: "bg-emerald-50 text-emerald-700 border-emerald-200",
     amber: "bg-amber-50 text-amber-700 border-amber-200",
@@ -75,7 +75,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${tones[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${tones[tone]} ${className}`}
     >
       {children}
     </span>
@@ -90,22 +90,22 @@ export function SectionTitle({
   hint?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-baseline justify-between gap-3">
-      <h3 className="text-sm font-bold tracking-wide text-slate-500 uppercase">
+    <div className="mb-4 flex items-baseline justify-between gap-3 border-b border-slate-200 pb-2">
+      <h3 className="text-sm font-bold tracking-tight text-slate-800 uppercase">
         {children}
       </h3>
-      {hint ? <div className="text-xs text-slate-400">{hint}</div> : null}
+      {hint ? <div className="text-xs text-slate-500">{hint}</div> : null}
     </div>
   );
 }
 
 export function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm shadow-slate-100">
-      <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="text-[11px] font-semibold text-slate-500 uppercase">
         {label}
       </div>
-      <div className="text-xl font-bold text-slate-800">{value}</div>
+      <div className="mt-1 text-lg font-bold text-slate-900">{value}</div>
     </div>
   );
 }
@@ -119,17 +119,17 @@ export function WarningsList({
 }) {
   if (warnings.length === 0) {
     return (
-      <p className="text-xs text-emerald-600">
+      <p className="text-xs text-emerald-600 font-medium">
         ✓ Clean parse — no irregularities found.
       </p>
     );
   }
   return (
-    <details className="group rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+    <details className="group rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
       <summary className="cursor-pointer font-medium select-none">
         ⚠ {title} ({warnings.length}) — click to review
       </summary>
-      <ul className="mt-2 list-disc space-y-1 pl-4">
+      <ul className="mt-2 list-disc space-y-1 pl-4 text-amber-900">
         {warnings.map((w, i) => (
           <li key={i}>{w}</li>
         ))}
@@ -140,8 +140,8 @@ export function WarningsList({
 
 export function Spinner({ label }: { label?: string }) {
   return (
-    <span className="inline-flex items-center gap-2 text-sm text-slate-500">
-      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+    <span className="inline-flex items-center gap-2 text-sm text-slate-600">
+      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
       {label}
     </span>
   );

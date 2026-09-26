@@ -26,3 +26,6 @@ next-env.d.ts
 
 # vitest
 .vitest-cache/
+
+# Checked-in configuration template (no credentials)
+!.env.example

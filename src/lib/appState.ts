@@ -36,6 +36,10 @@ export interface AutoSettings {
 }
 
 export interface AppState {
+  pinnedCourseCodes: string[];
+  autoInitialCourseCodes: string[];
+  datasetSource: { label: string; updatedAt: string | null; loadedAt: string } | null;
+  termDatasetId?: string | null;
   step: number;
   slotSheet: ParsedSlotSheet | null;
   eligibility: ParsedEligibility | null;
@@ -57,9 +61,14 @@ export interface AppState {
   solveOutcome: SolveOutcome | null;
   /** renderable best-effort schedule when outcome === "impossible" */
   nearMiss: NearMissSchedule | null;
+  /** caution message set if AI replaced a course */
+  aiMessage?: string | null;
 }
 
 export const DEFAULT_STATE: AppState = {
+  pinnedCourseCodes: [],
+  autoInitialCourseCodes: [],
+  datasetSource: null,
   step: 0,
   slotSheet: null,
   eligibility: null,

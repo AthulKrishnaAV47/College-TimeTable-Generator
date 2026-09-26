@@ -1,147 +1,44 @@
 "use client";
-
 import { useState, type FormEvent } from "react";
-import type { SessionUser } from "@/lib/store";
-
-/**
- * Demo sign-in gate: keeps the app a zero-backend static site while giving
- * each student a named session. Credentials are validated client-side and
- * the profile lives only in this browser's localStorage.
- */
-export default function LoginPage({ onLogin }: { onLogin: (user: SessionUser) => void }) {
+import { api } from "@/lib/store";
+import { passwordHint } from "@/lib/authValidation";
+export default function LoginPage({ onLogin, reset = false }: { onLogin: () => void; reset?: boolean }) {
+  const [mode, setMode] = useState<"login" | "signup" | "forgot" | "reset">(reset ? "reset" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const n = name.trim();
-    const em = email.trim().toLowerCase();
-    if (!n) {
-      setError("Please enter your name.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-    if (password.length < 4) {
-      setError("Password must be at least 4 characters.");
-      return;
-    }
-    setError(null);
-    onLogin({ name: n, email: em });
-  };
-
-  return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-center gap-10 px-4 py-12 lg:flex-row lg:justify-between">
-      {/* Brand / value panel */}
-      <section className="max-w-md text-center lg:text-left">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-200/50 bg-white/40 px-4 py-1.5 text-xs font-semibold text-blue-700 shadow-sm backdrop-blur-md">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600"></span>
-          </span>
-          MyCamu slot-sheet planner
-        </div>
-        <h1 className="title-gradient text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Term Timetable Generator
-        </h1>
-        <p className="mt-4 text-base leading-relaxed text-slate-600">
-          Turn your term slot sheet into a <strong>valid, conflict-free weekly timetable</strong> —
-          100% of contact hours, zero collisions, your no-class rules respected (or a honest
-          closest-match when they can&apos;t be).
-        </p>
-        <ul className="mt-6 space-y-2 text-sm text-slate-600">
-          <li className="flex items-start gap-2">
-            <span aria-hidden className="mt-0.5 text-emerald-600">✓</span>
-            Parses the real MyCamu PDF export + SBC/FC eligibility table
-          </li>
-          <li className="flex items-start gap-2">
-            <span aria-hidden className="mt-0.5 text-emerald-600">✓</span>
-            Auto-picks a schedulable subject subset with ranked options
-          </li>
-          <li className="flex items-start gap-2">
-            <span aria-hidden className="mt-0.5 text-emerald-600">✓</span>
-            Exports PNG &amp; .ics calendar, saves drafts to compare
-          </li>
-        </ul>
-      </section>
-
-      {/* Sign-in card */}
-      <section className="w-full max-w-md">
-        <form
-          onSubmit={submit}
-          className="rounded-3xl border border-white/50 bg-white/60 p-6 shadow-2xl shadow-blue-900/10 backdrop-blur-xl sm:p-8"
-        >
-          <h2 className="text-xl font-bold text-slate-900">Sign in</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Demo sign-in — any name/email/password works and never leaves this browser.
-          </p>
-
-          <div className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="login-name" className="mb-1 block text-sm font-medium text-slate-700">
-                Your name
-              </label>
-              <input
-                id="login-name"
-                type="text"
-                autoComplete="name"
-                placeholder="e.g. Athul"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
-            <div>
-              <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-slate-700">
-                Email
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@college.edu"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
-            <div>
-              <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-slate-700">
-                Password
-              </label>
-              <input
-                id="login-password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="At least 4 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            className="mt-6 w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:-translate-y-0.5 hover:shadow-blue-500/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            Sign in
-          </button>
-          <p className="mt-3 text-center text-[11px] text-slate-400">
-            Your session, drafts and uploads stay in localStorage on this device.
-          </p>
-        </form>
-      </section>
-    </main>
-  );
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setError(""); setMessage("");
+    try {
+      const result = await api<{ message?: string }>(`/api/auth/${mode}`, { method: "POST", body: JSON.stringify({ name, email, password }) });
+      setPassword("");
+      if (mode === "login") onLogin();
+      else { setMessage(result.message ?? "Check your email."); if (mode === "reset") { setMode("login"); history.replaceState(null, "", "/"); } }
+    } catch (e) { setError(e instanceof Error ? e.message : "Request failed."); }
+    finally { setBusy(false); }
+  }
+  const title = { login: "Sign in", signup: "Create account", forgot: "Send reset link", reset: "Set new password" }[mode];
+  return <main className="mx-auto grid min-h-screen max-w-5xl items-center gap-10 px-5 py-12 md:grid-cols-2">
+    <section><span className="rounded-full bg-indigo-100 px-3 py-1 text-sm text-indigo-800">MyCamu term planner · Beta</span>
+      <h1 className="mt-6 text-4xl font-extrabold text-slate-900">Your term.<br />Your timetable.</h1>
+      <p className="mt-5 text-slate-600">Find conflict-free sections, keep completed courses out of your plan, and save private drafts across devices.</p>
+    </section>
+    <section className="rounded-3xl border bg-white p-7 shadow-xl">
+      <h2 className="mb-5 text-2xl font-bold">{title}</h2>
+      <form onSubmit={submit} className="space-y-4">
+        {mode === "signup" && <label className="block">Your name<input className="mt-1 w-full rounded-lg border p-3" required maxLength={80} autoComplete="name" value={name} onChange={e => setName(e.target.value)} /></label>}
+        {mode !== "reset" && <label className="block">Email<input className="mt-1 w-full rounded-lg border p-3" type="email" required maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} /></label>}
+        {mode !== "forgot" && <label className="block">{mode === "reset" ? "New password" : "Password"}<input className="mt-1 w-full rounded-lg border p-3" type="password" required minLength={mode === "login" ? 1 : 12} maxLength={128} autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} /></label>}
+        {(mode === "signup" || mode === "reset") && <p className="text-xs text-slate-500">{passwordHint}</p>}
+        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+        <button disabled={busy} className="w-full rounded-xl bg-indigo-600 p-3 font-bold text-white disabled:opacity-50">{busy ? "Please wait…" : title}</button>
+      </form>
+      <div className="mt-4 flex flex-wrap gap-4 text-sm text-indigo-700">{(["login", "signup", "forgot"] as const).filter(m => m !== mode).map(m => <button key={m} onClick={() => { setMode(m); setPassword(""); setError(""); setMessage(""); }}>{m === "login" ? "Sign in" : m === "signup" ? "Create account" : "Forgot password?"}</button>)}</div>
+      <p className="mt-6 border-t pt-4 text-xs leading-relaxed text-slate-500">We store your email, profile, completed-course history and private drafts in Supabase. Submitted term datasets are shared after moderator approval; do not upload personal information. This independent beta is not affiliated with your college or MyCamu. Request account deletion from the account menu after signing in. <a className="underline" href="/privacy">Privacy details</a></p>
+    </section>
+  </main>;
 }

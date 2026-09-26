@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Course, StudentProfile } from "@/lib/types";
-import { normCode } from "@/lib/eligibility";
+import { normCode, resolveCompleted, matchesCourseSearch } from "@/lib/courseCodes";
 import { Badge, Btn, Card, SectionTitle } from "@/components/ui";
 
 /**
@@ -22,27 +22,31 @@ interface Props {
 export default function ProfileStep({ profile, courses, onChange, onNext, onBack }: Props) {
   const [rawCompleted, setRawCompleted] = useState(profile.completedCourseCodes.join(", "));
 
-  const offeredCodes = useMemo(
-    () => new Set(courses.map((c) => normCode(c.courseCode))),
-    [courses]
-  );
-
-  const completed = useMemo(
-    () =>
-      rawCompleted
-        .split(/[\n,;]+/)
-        .map((s) => s.trim().toUpperCase())
-        .filter((s) => s.length > 0),
-    [rawCompleted]
-  );
-
-  const unmatched = completed.filter((c) => !offeredCodes.has(c));
+  const entries = rawCompleted.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+  const { codes: completed, unmatched } = resolveCompleted(entries, courses);
 
   const commit = (next: Partial<StudentProfile>) => {
     onChange({
       ...profile,
       ...next,
-      completedCourseCodes: completed,
+      completedCourseCodes: [...completed, ...unmatched],
+    });
+  };
+
+  const [search, setSearch] = useState("");
+  const filteredCourses = useMemo(() => {
+    return courses.filter(c => matchesCourseSearch(c, search, courses));
+  }, [courses, search]);
+
+  const toggleCompleted = (code: string) => {
+    const norm = normCode(code);
+    const next = completed.includes(norm)
+      ? completed.filter(c => c !== norm)
+      : [...completed, norm];
+    setRawCompleted([...next, ...unmatched].join(", ")); // sync raw state
+    onChange({
+      ...profile,
+      completedCourseCodes: [...next, ...unmatched],
     });
   };
 
@@ -53,7 +57,7 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
       ...profile,
       year,
       termLabel: year === "I" ? `Year I${term}` : `Year II & III${term}`,
-      completedCourseCodes: completed,
+      completedCourseCodes: [...completed, ...unmatched],
     });
   };
 
@@ -110,7 +114,7 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
                 onClick={() => setTerm(n as 1 | 2)}
                 className={`rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? "border-blue-600 bg-blue-600 text-white"
+                    ? "border-blue-600 bg-blue-600 text-slate-800"
                     : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
@@ -122,37 +126,70 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
             value={profile.termLabel}
             onChange={(e) => commit({ termLabel: e.target.value })}
             placeholder="Custom label, e.g. Year I - Term 2 Schedule"
-            className="min-w-56 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="min-w-56 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
           />
         </div>
       </Card>
 
       <Card className="p-5">
-        <SectionTitle hint="Comma or newline separated — excludes these from auto-selection and the eligible list">
+        <SectionTitle hint="Select the courses you have already completed. They will be excluded from your eligible list.">
           Already-completed courses
         </SectionTitle>
-        <textarea
-          value={rawCompleted}
-          onChange={(e) => {
-            setRawCompleted(e.target.value);
-            const codes = e.target.value
-              .split(/[\n,;]+/)
-              .map((s) => s.trim().toUpperCase())
-              .filter((s) => s.length > 0);
-            commit({ completedCourseCodes: codes });
-          }}
-          placeholder={"e.g.\n19AI301, 19AI302\n19EE304"}
-          spellCheck={false}
-          className="h-24 w-full resize-y rounded-lg border border-slate-300 bg-slate-50 p-2.5 font-mono text-xs focus:border-blue-500 focus:bg-white focus:outline-none"
+        <label className="mb-3 block text-sm">Completed course codes, names or abbreviations (comma separated)
+          <textarea aria-label="Completed courses" className="mt-1 w-full rounded-lg border p-2" value={rawCompleted}
+            onChange={e => {
+              setRawCompleted(e.target.value);
+              const entries = e.target.value.split(/[\n,;]+/).filter(s => s.trim());
+              const result = resolveCompleted(entries, courses);
+              onChange({ ...profile, completedCourseCodes: [...result.codes, ...result.unmatched] });
+            }} />
+        </label>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search offered courses by code or title..."
+          className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
         />
+        <div className="h-48 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+          {filteredCourses.length === 0 ? (
+            <div className="p-4 text-center text-sm text-slate-500">No courses match your search.</div>
+          ) : (
+            <div className="grid gap-1 sm:grid-cols-2">
+              {filteredCourses.map((c) => {
+                const checked = completed.includes(normCode(c.courseCode));
+                return (
+                  <label
+                    key={c.courseCode}
+                    className={`flex cursor-pointer items-start gap-2 rounded-md p-2 transition-colors hover:bg-slate-50 ${
+                      checked ? "bg-blue-50" : ""
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleCompleted(c.courseCode)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="flex-1 text-sm">
+                      <div className="font-semibold text-slate-800">{c.courseCode}</div>
+                      <div className="line-clamp-1 text-xs text-slate-500" title={c.courseName}>
+                        {c.courseName}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           {completed.length > 0 && <Badge tone="blue">{completed.length} completed</Badge>}
           {unmatched.length > 0 && (
             <Badge tone="amber">
-              not offered this term (kept in history): {unmatched.join(", ")}
+              Couldn’t match to a known course; choose from the list or correct/remove the entry: {unmatched.join(", ")}
             </Badge>
           )}
-          {completed.length === 0 && <span className="text-slate-400">None yet — fine for Year I.</span>}
+          {completed.length === 0 && <span className="text-slate-500">None yet — fine for Year I.</span>}
         </div>
       </Card>
 
@@ -160,7 +197,7 @@ export default function ProfileStep({ profile, courses, onChange, onNext, onBack
         <Btn variant="secondary" onClick={onBack}>
           ← Back
         </Btn>
-        <Btn onClick={onNext}>See eligible subjects →</Btn>
+        <Btn onClick={onNext} disabled={unmatched.length > 0}>See eligible subjects →</Btn>
       </div>
     </div>
   );

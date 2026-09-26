@@ -85,7 +85,7 @@ export default function ConstraintsCard({
   const chip = (active: boolean) =>
     `rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
       active
-        ? "border-red-500 bg-red-500 text-white"
+        ? "border-red-500 bg-red-500 text-slate-800"
         : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
     }`;
 
@@ -131,7 +131,7 @@ export default function ConstraintsCard({
                 <button
                   key={`${r.start}-${r.end}`}
                   onClick={() => removeRange(r)}
-                  className="rounded-full border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-medium text-white"
+                  className="rounded-full border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-medium text-slate-800"
                   title="Click to remove"
                 >
                   No {fmtRange(r)} ✕
@@ -144,14 +144,14 @@ export default function ConstraintsCard({
               type="time"
               value={customStart}
               onChange={(e) => setCustomStart(e.target.value)}
-              className="rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
             />
-            <span className="text-xs text-slate-400">to</span>
+            <span className="text-xs text-slate-500">to</span>
             <input
               type="time"
               value={customEnd}
               onChange={(e) => setCustomEnd(e.target.value)}
-              className="rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
             />
             <button
               onClick={addCustom}
@@ -164,7 +164,7 @@ export default function ConstraintsCard({
         </div>
 
         {days.length === 0 && ranges.length === 0 ? (
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-500">
             Nothing excluded — every section of every subject is a candidate.
           </p>
         ) : (

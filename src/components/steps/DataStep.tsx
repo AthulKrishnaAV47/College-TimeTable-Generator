@@ -1,5 +1,6 @@
 "use client";
 
+import { validateUpload } from "@/lib/uploads";
 import { Fragment, useRef, useState } from "react";
 import { parseSlotSheet } from "@/lib/parse/slotSheet";
 import { parseEligibilityTable } from "@/lib/parse/eligibility";
@@ -46,6 +47,7 @@ function FilePanel({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const parseText = (text: string) => {
+    if (text.length > 1_000_000) { setError(kind, "Text exceeds the 1 MB limit."); return; }
     if (kind === "slotSheet") {
       const res = parseSlotSheet(text);
       if (res.courses.length === 0) {
@@ -69,6 +71,8 @@ function FilePanel({
     setBusy(true);
     setError(kind, undefined);
     try {
+      if (file.size > 3_000_000) throw new Error("Files must be no larger than 3 MB.");
+      validateUpload(file.name, file.type, new Uint8Array(await file.arrayBuffer()));
       if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
         const form = new FormData();
         form.append("kind", kind);
@@ -174,7 +178,7 @@ function FilePanel({
             : "…or paste the eligibility table:\nCourse Code | SBC or FC | Year\n19AI301 | SBC | I\n19CS305 | FC | II & III"
         }
         spellCheck={false}
-        className="h-36 w-full resize-y rounded-lg border border-slate-300 bg-slate-50 p-2.5 font-mono text-[11px] leading-snug text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-none"
+        className="h-36 w-full resize-y rounded-lg border border-slate-300 bg-slate-50 p-2.5 font-mono text-[11px] leading-snug text-slate-700 focus:border-blue-400 focus:bg-white focus:outline-none"
       />
 
       <div className="mt-3 flex items-center justify-between gap-2">
@@ -226,7 +230,7 @@ function SlotSheetPreview({ parsed }: { parsed: ParsedSlotSheet }) {
             return (
               <Fragment key={c.courseCode}>
                 <tr
-                  className="cursor-pointer border-t border-slate-100 hover:bg-blue-50/50"
+                  className="cursor-pointer border-t border-slate-100 hover:bg-blue-50"
                   onClick={() => setOpen(open === c.courseCode ? null : c.courseCode)}
                 >
                   <td className="px-2.5 py-1.5 font-mono font-medium">{c.courseCode}</td>
@@ -242,12 +246,12 @@ function SlotSheetPreview({ parsed }: { parsed: ParsedSlotSheet }) {
                   </td>
                   <td className="px-2 py-1.5">
                     {realHrs}
-                    {realHrs !== hrs && <span className="text-slate-400"> (+{hrs - realHrs} ph)</span>}
+                    {realHrs !== hrs && <span className="text-slate-500"> (+{hrs - realHrs} ph)</span>}
                   </td>
                 </tr>
                 {open === c.courseCode &&
                   c.sections.map((s) => (
-                    <tr key={`${c.courseCode}-${s.slotCode}`} className="border-t border-slate-100 bg-slate-50/60">
+                    <tr key={`${c.courseCode}-${s.slotCode}`} className="border-t border-slate-100 bg-slate-50">
                       <td className="px-2.5 py-1" />
                       <td className="px-2.5 py-1 font-mono text-[10.5px] text-slate-600" colSpan={4}>
                         {s.slotCode} · {s.batch} · {s.faculty.join(", ") || "—"} ·{" "}
